@@ -1,0 +1,353 @@
+Cahier des Charges – Zishop.co (mise à jour avril 2025)
+1. Introduction
+Zishop.co est une marketplace mobile dédiée aux clients séjournant à l’hôtel, leur permettant de commander des produits auprès de commerçants locaux et de se faire livrer directement à la réception de leur établissement. Le projet repose initialement sur le CMS eMart (multi-vendeurs) avec des personnalisations spécifiques au modèle hôtelier. Un partenariat avec Yper a été validé pour assurer les livraisons à partir de la V2.
+
+2. Objectifs Généraux
+Créer une application mobile connectée à une marketplace propre à chaque hôtel (via QR code ou code hôtel).
+
+
+Permettre aux clients de découvrir les produits de commerçants dans un rayon défini (3 km autour de l’hôtel, modifiable).
+
+
+Assurer la livraison à l’hôtel via Yper, avec suivi dans l’interface hôtel (à partir de la V2).
+
+
+Implémenter une logique de commission : 75 % commerçant, 25 % Zishop (incluant 5 % reversés à l’hôtel).
+
+
+Centraliser les paiements via Zishop avec redistribution automatisée.
+
+
+Intégrer un système de QR code par hôtel pour synchroniser automatiquement le client avec la bonne marketplace.
+
+
+
+3. Fonctionnalités Requises
+3.1. Connexion Client / QR Code Hôtel
+À l’ouverture de l’application, le client scanne un QR code propre à l’hôtel.
+
+
+En cas de problème technique (appareil photo), il peut saisir manuellement le code hôtel.
+
+
+Une fois identifié, il accède à la marketplace de l’hôtel correspondant.
+
+
+Affichage géolocalisé des commerçants dans un rayon de 3 km autour de l’établissement (paramétrable).
+
+
+3.2. Interface Hôtel
+Suivi des commandes et des livraisons (à partir de la V2).
+
+
+Validation de la bonne réception par le client à la réception de l’hôtel.
+
+
+Visualisation des revenus générés (dashboard en temps réel).
+
+
+Attribution automatique d’un code hôtel (ex. ZI75015) + QR code généré dynamiquement.
+
+
+3.3. Interface Client
+Navigation dans la marketplace locale après connexion via QR code.
+
+
+Ajout au panier et paiement en ligne via Stripe.
+
+
+Livraison à l’accueil de l’hôtel (sans gestion de créneaux horaires).
+
+
+Possibilité de noter la commande (option V2).
+
+
+3.4. Interface Commerçant
+Gestion simple des produits, descriptions, prix.
+
+
+Réception des commandes avec indication du statut livraison.
+
+
+Accès aux revenus générés et à l’historique.
+
+
+3.5. Interface Admin Zishop
+Vue globale sur toutes les commandes, commerçants, hôtels.
+
+
+Suivi des paiements et commissions.
+
+
+Génération des QR codes hôtel.
+
+
+Supervision des anomalies.
+
+
+
+4. Logistique & Livraison (via Yper)
+V1 (MVP)
+Livraison manuelle : les commerçants déposent les commandes ou une livraison est organisée hors API.
+
+
+Statuts limités : “Commande envoyée”, “En cours de livraison”, “Livrée à la réception”.
+
+
+V2 (Année 1)
+Intégration API avec Yper :
+
+
+Envoi automatique de la demande de livraison depuis l’app
+
+
+Suivi en temps réel pour hôtel et client
+
+
+Confirmation de réception avec signature ou bouton “reçu”
+
+
+
+5. Paiement & Répartition
+Paiement centralisé via Zishop
+Utilisation de Stripe (split à confirmer)
+
+
+Paiement du client à Zishop → redistribution mensuelle ou automatique :
+
+
+75 % pour le commerçant
+
+
+20 % pour Zishop
+
+
+5 % pour l’hôtel affilié
+
+
+Gestion des reversements assurée depuis l’espace admin
+
+
+
+6. Fonctionnalités Exclues du MVP (reportées à V2+)
+Fonction white label pour groupes hôteliers (non incluse dans eMart V1)
+
+
+Publicité/boost visibilité commerçants
+
+
+Paiement par points fidélité ou abonnements
+
+
+Chat avec commerçants / notifications avancées
+
+
+Suivi précis des livreurs (hors Yper)
+
+
+
+7. Infrastructure et Sécurité
+Déploiement initial sur serveur partagé (type Namecheap)
+
+
+Migration envisagée sur serveur VPS ou scalable (AWS) selon traction
+
+
+Certificat SSL + conformité RGPD
+
+
+Chiffrement des données et transactions (via Stripe)
+
+
+
+8. Roadmap Technique
+Phase 1 : Préparation MVP
+Installation eMart, personnalisation du parcours QR code
+
+
+Configuration Stripe, dashboard hôtels et commerçants
+
+
+Tests sur 3 hôtels pilotes
+
+
+Phase 2 : Intégration V2
+API Yper (livraison automatique)
+
+
+Tracking livraison, réception validée
+
+
+Optimisation performance + UI
+
+
+
+9. Livrables attendus
+Application mobile (iOS + Android)
+
+
+Plateforme marketplace multi-commerçants connectée aux hôtels
+
+
+Génération QR code hôtel
+
+
+Interfaces commerçants, hôtels, admin
+
+
+Documentation API pour intégration Yper
+
+
+10. Contraintes & Délais
+Durée du MVP : 1 mois (hors retards liés à Stripe)
+
+
+Budget prévisionnel :
+
+
+Regular License eMart (44$)
+
+
+Personnalisation : ~1500€
+
+
+Hébergement : 10–30€/mois
+
+
+Respect des normes RGPD et sécurité des paiements
+
+
+
+11. Stratégie de Développement & Licensing
+Phase 1 : Regular License (44$) → pour développement & tests internes
+
+
+Phase 2 : Extended License (399$) → achat après validation avec les hôtels pilotes
+
+
+
+12. Conclusion
+Zishop.co vise à créer une marketplace mobile rapide, simple et fiable pour rapprocher les commerçants locaux des voyageurs séjournant à l’hôtel. Le projet sera lancé en version test sur un périmètre restreint avant un déploiement élargi. L’intégration progressive de fonctionnalités avancées (livraison, marque blanche, publicité) permettra de faire évoluer le modèle sans alourdir le MVP.
+
+
+
+
+
+
+
+🚀 Détail par Sprint
+🔧 Sprint 1 (Semaine 1)
+Infrastructure & CI/CD
+Créer un monorepo 
+Initialiser NestJS + React Native + React.js + React.js (admin)
+Déployer en staging sur VPS 
+
+
+géneration automatique d’architacture de projet via AI 
+🔐 Sprint 2 (Semaine 2)
+Auth & Modèle DB
+Implémenter JWT + refresh token via Passport.js
+
+
+Créer entités TypeORM : User, Hotel, Merchant, Product, Order, Role
+
+
+Générer migrations, seed data pour test
+site vitrine 
+développement d’un site vitrine côté hotel
+📦 Sprint 3 (Semaine 3)
+API Hôtels & QR Codes
+Endpoint  hôtels + génération code & QR 
+Endpoint géolocalisation : rechercher commerçants dans un rayon configurable
+
+
+Documenter les routes avec Swagger (NestJS)
+
+
+Tests API pour ces endpoints
+site vitrine 
+développement d’un site vitrine côté client 
+
+📱 Sprint 4 (Semaine 4)
+Mobile MVP – Connexion & Listing
+Écran d’accueil React Native : scan QR + saisie manuelle
+
+
+Navigation vers liste commerçants (FlatList)
+
+
+Intégrer API géoloc + afficher distance
+
+
+Gestion des états de chargement et erreurs
+site vitrine 
+développement d’un site vitrine côté commercant 
+💳 Sprint 5 (Semaine 5)
+Panier & Paiement
+Backend : intégrer Stripe Connect (account link, webhook pour paiement)
+
+
+Endpoints panier CRUD, création session Stripe, capture du paiement
+
+
+Mobile : UI panier (ajout/suppression), écran paiement via WebView ou SDK natif
+
+
+Tests de bout en bout du flow paiement
+
+site vitrine 
+test final des 3 site 
+🛍️ Sprint 6 (Semaine 6)
+Dashboards Web Commerçant & Hôtel
+Front React.js (Tailwind + ShadCN) : login + dashboard minimal
+
+
+Commerçant : CRUD produits, liste commandes, revenus
+
+
+Hôtel : liste commandes, statuts, aperçu revenus
+
+
+Consommation des APIs existantes, gestion des tokens
+
+
+📬 Sprint 7 (Semaine 7)
+Livraison Manuel & Notifications
+Implémenter statuts manuels (“envoyée/ en livraison/ reçue”)
+
+
+Intégrer Firebase Cloud Messaging (FCM) côté backend + mobile
+
+
+Gateway NestJS WebSocket pour mettre à jour dashboards en temps réel
+
+
+Bouton “Commande reçue” côté mobile & Web
+
+
+
+
+📋 Livrables & Critères d’acceptation
+Repo Monorepo avec code backend + front (mobile & web)
+
+
+Documentation API (Swagger) et guide d’installation
+
+
+Builds automatisés via CI/CD + déploiement staging
+
+
+MVP Mobile fonctionnel : scan QR → commande → paiement → statut
+
+
+Interfaces Web Commerçant/Hôtel basiques mais utilisables
+
+
+Livraison V1 et notifications opérationnelles
+
+
+Tests unitaires (≥ 80 % couverture) et tests E2E réussis
+
+
+
+
