@@ -38,6 +38,15 @@ BEGIN
     END IF;
 END $$;
 
+-- Ajout de la colonne stock à la table products
+ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 100;
+
+-- Met à jour les produits existants avec un stock par défaut si besoin
+UPDATE products SET stock = 100 WHERE stock IS NULL;
+
+-- Index pour optimiser les requêtes sur le stock
+CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock);
+
 -- Vérifier les colonnes ajoutées
 SELECT 'COLONNES AJOUTÉES:' as info;
 SELECT 

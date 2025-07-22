@@ -1,4 +1,4 @@
-import { Hotel, InsertHotel, Merchant, InsertMerchant, Product, InsertProduct, Order, InsertOrder, User, InsertUser, Client, InsertClient } from "@shared/schema";
+import { Hotel, InsertHotel, Merchant, InsertMerchant, Product, InsertProduct, Order, InsertOrder, User, InsertUser, Client, InsertClient, HotelMerchant, InsertHotelMerchant } from "@shared/schema";
 
 export interface IStorage {
   // Hotels
@@ -48,6 +48,14 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  authenticateUser(username: string, password: string): Promise<User | undefined>;
+
+  // Hotel-Merchant associations
+  getHotelMerchants(hotelId: number): Promise<HotelMerchant[]>;
+  getMerchantHotels(merchantId: number): Promise<HotelMerchant[]>;
+  addHotelMerchant(association: InsertHotelMerchant): Promise<HotelMerchant>;
+  updateHotelMerchant(hotelId: number, merchantId: number, isActive: boolean): Promise<HotelMerchant | undefined>;
+  removeHotelMerchant(hotelId: number, merchantId: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -57,6 +65,7 @@ export class MemStorage implements IStorage {
   private orders: Map<number, Order> = new Map();
   private users: Map<number, User> = new Map();
   private clients: Map<number, Client> = new Map();
+  private hotelMerchants: Map<number, HotelMerchant> = new Map();
   private currentId = 1;
 
   constructor() {
@@ -232,6 +241,13 @@ export class MemStorage implements IStorage {
       ],
       totalAmount: "29.90",
       status: "delivered",
+      merchantCommission: "22.43", // 75%
+      zishopCommission: "5.98", // 20%
+      hotelCommission: "1.50", // 5%
+      deliveryNotes: null,
+      confirmedAt: new Date(),
+      deliveredAt: new Date(),
+      estimatedDelivery: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -250,6 +266,13 @@ export class MemStorage implements IStorage {
       ],
       totalAmount: "24.90",
       status: "preparing",
+      merchantCommission: "18.68", // 75%
+      zishopCommission: "4.98", // 20%
+      hotelCommission: "1.25", // 5%
+      deliveryNotes: null,
+      confirmedAt: new Date(),
+      deliveredAt: null,
+      estimatedDelivery: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -282,6 +305,29 @@ export class MemStorage implements IStorage {
       entityId: merchant1.id,
     };
     this.users.set(merchantUser.id, merchantUser);
+
+    // Seed Hotel-Merchant associations
+    const associations = [
+      { hotelId: hotel1.id, merchantId: merchant1.id },
+      { hotelId: hotel1.id, merchantId: merchant2.id },
+      { hotelId: hotel1.id, merchantId: merchant3.id },
+      { hotelId: hotel2.id, merchantId: merchant1.id },
+      { hotelId: hotel2.id, merchantId: merchant3.id },
+      { hotelId: hotel3.id, merchantId: merchant2.id },
+      { hotelId: hotel3.id, merchantId: merchant3.id },
+    ];
+
+    associations.forEach(({ hotelId, merchantId }) => {
+      const association: HotelMerchant = {
+        id: this.currentId++,
+        hotelId,
+        merchantId,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.hotelMerchants.set(association.id, association);
+    });
   }
 
   // Hotel methods
@@ -447,6 +493,7 @@ export class MemStorage implements IStorage {
   async createOrder(insertOrder: InsertOrder): Promise<Order> {
     const id = this.currentId++;
     const orderNumber = this.generateOrderNumber();
+    const totalAmount = parseFloat(insertOrder.totalAmount);
     const order: Order = {
       id,
       hotelId: insertOrder.hotelId,
@@ -458,6 +505,13 @@ export class MemStorage implements IStorage {
       items: insertOrder.items,
       totalAmount: insertOrder.totalAmount,
       status: insertOrder.status || "pending",
+      merchantCommission: (totalAmount * 0.75).toFixed(2),
+      zishopCommission: (totalAmount * 0.20).toFixed(2),
+      hotelCommission: (totalAmount * 0.05).toFixed(2),
+      deliveryNotes: insertOrder.deliveryNotes || null,
+      confirmedAt: insertOrder.confirmedAt || null,
+      deliveredAt: insertOrder.deliveredAt || null,
+      estimatedDelivery: insertOrder.estimatedDelivery || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -534,6 +588,55 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async authenticateUser(username: string, password: string): Promise<User | undefined> {
+    const user = await this.getUserByUsername(username);
+    if (user && user.password === password) {
+      return user;
+    }
+    return undefined;
+  }
+
+  // Hotel-Merchant associations
+  async getHotelMerchants(hotelId: number): Promise<HotelMerchant[]> {
+    return Array.from(this.hotelMerchants.values()).filter(hm => hm.hotelId === hotelId && hm.isActive);
+  }
+
+  async getMerchantHotels(merchantId: number): Promise<HotelMerchant[]> {
+    return Array.from(this.hotelMerchants.values()).filter(hm => hm.merchantId === merchantId && hm.isActive);
+  }
+
+  async addHotelMerchant(association: InsertHotelMerchant): Promise<HotelMerchant> {
+    const id = this.currentId++;
+    const hotelMerchant: HotelMerchant = {
+      id,
+      hotelId: association.hotelId,
+      merchantId: association.merchantId,
+      isActive: association.isActive !== undefined ? association.isActive : true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.hotelMerchants.set(id, hotelMerchant);
+    return hotelMerchant;
+  }
+
+  async updateHotelMerchant(hotelId: number, merchantId: number, isActive: boolean): Promise<HotelMerchant | undefined> {
+    const association = Array.from(this.hotelMerchants.values()).find(
+      hm => hm.hotelId === hotelId && hm.merchantId === merchantId
+    );
+    if (!association) return undefined;
+    association.isActive = isActive;
+    association.updatedAt = new Date();
+    return association;
+  }
+
+  async removeHotelMerchant(hotelId: number, merchantId: number): Promise<boolean> {
+    const association = Array.from(this.hotelMerchants.entries()).find(
+      ([_, hm]) => hm.hotelId === hotelId && hm.merchantId === merchantId
+    );
+    if (!association) return false;
+    return this.hotelMerchants.delete(association[0]);
   }
 }
 

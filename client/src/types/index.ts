@@ -1,46 +1,92 @@
 export interface Product {
-  id: string;
+  id: number;
+  merchantId: number;
   name: string;
-  description: string;
-  price: number;
-  image: string;
-  merchantId: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: Date;
-  updatedAt: Date;
-  rejectionReason?: string;
+  description?: string;
+  price: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+  category: string;
+  isSouvenir: boolean;
+  origin?: string;
+  material?: string;
 }
 
 export interface Merchant {
-  id: string;
+  id: number;
   name: string;
-  description: string;
   address: string;
-  latitude: number;
-  longitude: number;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: Date;
-  updatedAt: Date;
+  category: string;
+  latitude: string;
+  longitude: string;
+  rating: string;
+  reviewCount: number;
+  isOpen: boolean;
+  imageUrl?: string;
+  status?: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
-  products: Product[];
+  products?: Product[];
 }
 
 export interface Hotel {
-  id: string;
+  id: number;
   name: string;
   address: string;
-  latitude: number;
-  longitude: number;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: Date;
-  updatedAt: Date;
-  rejectionReason?: string;
+  code: string;
+  latitude: string;
+  longitude: string;
   qrCode: string;
-  merchants: Merchant[];
+  isActive: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  merchants?: Merchant[];
+}
+
+export interface Client {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  isActive: boolean;
+  hasCompletedTutorial: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderItem {
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: string;
+}
+
+export interface Order {
+  id: number;
+  hotelId: number;
+  merchantId: number;
+  clientId?: number;
+  orderNumber: string;
+  customerName: string;
+  customerRoom: string;
+  items: OrderItem[];
+  totalAmount: string;
+  status: string;
+  merchantCommission?: string;
+  zishopCommission?: string;
+  hotelCommission?: string;
+  deliveryNotes?: string;
+  confirmedAt?: string;
+  deliveredAt?: string;
+  estimatedDelivery?: string;
+  createdAt: string;
+  updatedAt: string;
+  pickedUp?: boolean;
+  pickedUpAt?: string;
 }
 
 export interface AdminProductValidation {
-  productId: string;
+  productId: number;
   status: 'approved' | 'rejected';
   rejectionReason?: string;
   validatedAt: Date;
@@ -48,7 +94,7 @@ export interface AdminProductValidation {
 }
 
 export interface AdminMerchantValidation {
-  merchantId: string;
+  merchantId: number;
   status: 'approved' | 'rejected';
   rejectionReason?: string;
   validatedAt: Date;
@@ -56,7 +102,7 @@ export interface AdminMerchantValidation {
 }
 
 export interface AdminHotelValidation {
-  hotelId: string;
+  hotelId: number;
   status: 'approved' | 'rejected';
   rejectionReason?: string;
   validatedAt: Date;

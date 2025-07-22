@@ -21,6 +21,37 @@ axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+async function fetchWithErrorHandling(url: string, options?: RequestInit) {
+  try {
+    const response = await fetch(url, options);
+    
+    // Vérifier le content-type
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      // Si ce n'est pas du JSON, c'est probablement une erreur HTML
+      const text = await response.text();
+      console.error("Non-JSON response:", text.substring(0, 200));
+      
+      if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+        throw new Error("Le serveur n'est pas accessible. Veuillez vérifier que le serveur backend est démarré.");
+      }
+      throw new Error("Réponse invalide du serveur");
+    }
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    return response;
+  } catch (error) {
+    if (error.message.includes("Failed to fetch")) {
+      throw new Error("Impossible de se connecter au serveur. Vérifiez que le serveur est démarré sur le port 5000.");
+    }
+    throw error;
+  }
+}
+
 export const api = {
   // Hotels
   getHotels: (): Promise<Hotel[]> =>
@@ -32,6 +63,9 @@ export const api = {
   // Merchants
   getMerchantsNearHotel: (hotelId: number, radius: number = 3): Promise<Merchant[]> =>
     axiosInstance.get(`/merchants/near/${hotelId}?radius=${radius}`).then(res => res.data),
+
+  getAllMerchants: (): Promise<Merchant[]> =>
+    axiosInstance.get('/merchants').then(res => res.data),
 
   // Products
   getProductsByMerchant: (merchantId: number): Promise<Product[]> =>
@@ -103,8 +137,17 @@ export const api = {
     axiosInstance.get(`/orders/client/${clientId}/active`).then(res => res.data),
 
   // Client authentication and management
-  loginClient: (email: string, password: string): Promise<Client> =>
-    apiRequest("POST", "/clients/login", { email, password }).then((res) => res.json()),
+  async login(email: string, password: string) {
+    console.log("API Login attempt:", { email });
+    const response = await fetchWithErrorHandling("/api/clients/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    console.log("API Login response:", data);
+    return data;
+  },
 
   registerClient: (clientData: InsertClient): Promise<Client> =>
     apiRequest("POST", "/clients/register", clientData).then((res) => res.json()),

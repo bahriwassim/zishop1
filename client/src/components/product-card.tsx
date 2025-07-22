@@ -68,6 +68,11 @@ export default function ProductCard({ product, merchantName, onAddToCart }: Prod
                 </div>
               </div>
             </div>
+            {typeof product.stock === 'number' && (
+              <div style={{ fontSize: '0.9em', color: product.stock === 0 ? 'red' : '#555' }}>
+                Stock restant : {product.stock}
+              </div>
+            )}
             
             {/* Informations sur le commerçant */}
             {merchantName && (

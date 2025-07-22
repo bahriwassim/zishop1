@@ -29,25 +29,25 @@ interface AdminSidebarProps {
   onSectionChange: (section: string) => void;
 }
 
+interface MenuItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  badge?: string;
+}
+
 export default function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarProps) {
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { id: "dashboard", label: "Vue d'ensemble", icon: Home },
-    { id: "hotels", label: "Gestion Hôtels", icon: Building, badge: "250" },
-    { id: "merchants", label: "Gestion Commerçants", icon: Store, badge: "847" },
+    { id: "hotels", label: "Gestion Hôtels", icon: Building },
+    { id: "merchants", label: "Gestion Commerçants", icon: Store },
     { id: "orders", label: "Toutes les commandes", icon: ShoppingCart },
+    { id: "users", label: "Gestion Accès", icon: Users },
+    { id: "validation", label: "Validation Entités", icon: Shield },
+    { id: "orders-analytics", label: "Analyse Commandes", icon: Activity },
     { id: "analytics", label: "Analytique globale", icon: BarChart3 },
-    { id: "users", label: "Utilisateurs", icon: Users },
-    { id: "financial", label: "Finances", icon: DollarSign },
-    { id: "platform", label: "Plateforme", icon: Globe },
-    { id: "security", label: "Sécurité", icon: Shield },
-    { id: "reports", label: "Rapports", icon: FileText },
-    { id: "support", label: "Support", icon: Headphones, badge: "12" },
-    { id: "system", label: "Système", icon: Database },
-    { id: "integrations", label: "Intégrations", icon: Zap },
-    { id: "notifications", label: "Notifications", icon: Bell, badge: "7" },
-    { id: "settings", label: "Paramètres", icon: Settings },
   ];
 
   return (
@@ -115,13 +115,20 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
       {/* Quick Actions */}
       <div className="p-4 border-t">
         <div className="space-y-2">
-          <Button className="w-full bg-purple-600 hover:bg-purple-700 text-sm">
+          <Button 
+            onClick={() => onSectionChange("hotels")} 
+            className="w-full bg-purple-600 hover:bg-purple-700 text-sm"
+          >
             <Plus className="mr-2" size={16} />
             Nouvel hôtel
           </Button>
-          <Button variant="outline" className="w-full text-sm">
-            <Activity className="mr-2" size={16} />
-            Rapport système
+          <Button 
+            onClick={() => onSectionChange("merchants")} 
+            variant="outline" 
+            className="w-full text-sm"
+          >
+            <Plus className="mr-2" size={16} />
+            Nouveau commerçant
           </Button>
         </div>
       </div>

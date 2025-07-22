@@ -26,12 +26,38 @@ interface CartItem extends Product {
 type AppState = "auth" | "register" | "tutorial" | "client-dashboard" | "hotel-selection" | "shopping";
 
 export default function MobileApp() {
-  const [appState, setAppState] = useState<AppState>("auth");
-  const [client, setClient] = useState<any>(null);
+  const [appState, setAppState] = useState<AppState>(() => {
+    // Check if client is already logged in
+    const savedClient = localStorage.getItem("client");
+    if (savedClient) {
+      return "client-dashboard";
+    }
+    return "auth";
+  });
+  const [client, setClient] = useState<any>(() => {
+    // Load client from localStorage if available
+    const savedClient = localStorage.getItem("client");
+    return savedClient ? JSON.parse(savedClient) : null;
+  });
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
-  const [lastHotel, setLastHotel] = useState<Hotel | null>(null);
+  const [lastHotel, setLastHotel] = useState<Hotel | null>(() => {
+    // Load last hotel from localStorage if available
+    const savedHotel = localStorage.getItem("lastHotel");
+    return savedHotel ? JSON.parse(savedHotel) : null;
+  });
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  // Charger le panier depuis le localStorage au démarrage
+  useEffect(() => {
+    const savedCart = localStorage.getItem("cartItems");
+    if (savedCart) {
+      try {
+        setCartItems(JSON.parse(savedCart));
+      } catch {}
+    }
+  }, []);
+
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [customerRoom, setCustomerRoom] = useState("");
@@ -59,22 +85,30 @@ export default function MobileApp() {
 
   const popularProducts = allProducts.slice(0, 4);
 
+  // Déclarer handleOrderSuccess AVANT useMutation
+  const handleOrderSuccess = (newOrder: any) => {
+    setCurrentOrder(newOrder);
+    setCartItems([]);
+    setShowRoomModal(false);
+    toast({
+      title: "Commande créée",
+      description: `Votre commande #${newOrder.orderNumber} a été envoyée.`,
+    });
+    queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
+    localStorage.removeItem("cartItems"); // Clear cart from localStorage
+  };
+
   const createOrderMutation = useMutation({
     mutationFn: api.createOrder,
-    onSuccess: (newOrder) => {
-      setCurrentOrder(newOrder);
-      setCartItems([]);
-      setShowRoomModal(false);
-      toast({
-        title: "Commande créée",
-        description: `Votre commande #${newOrder.orderNumber} a été envoyée.`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-    },
-    onError: () => {
+    onSuccess: handleOrderSuccess,
+    onError: (error: any) => {
+      let description = "Impossible de créer la commande.";
+      if (error?.response?.data?.message) {
+        description = error.response.data.message;
+      }
       toast({
         title: "Erreur",
-        description: "Impossible de créer la commande.",
+        description,
         variant: "destructive",
       });
     },
@@ -82,6 +116,9 @@ export default function MobileApp() {
 
   const handleClientLogin = (clientData: any) => {
     setClient(clientData);
+    // Save client to localStorage
+    localStorage.setItem("client", JSON.stringify(clientData));
+    
     if (!clientData.hasCompletedTutorial) {
       setAppState("tutorial");
     } else {
@@ -96,7 +133,9 @@ export default function MobileApp() {
   const handleTutorialComplete = () => {
     if (client) {
       // Update client tutorial status after login
-      setClient({ ...client, hasCompletedTutorial: true });
+      const updatedClient = { ...client, hasCompletedTutorial: true };
+      setClient(updatedClient);
+      localStorage.setItem("client", JSON.stringify(updatedClient));
       setAppState("client-dashboard");
     } else {
       // Coming from register flow, go to register
@@ -105,17 +144,25 @@ export default function MobileApp() {
   };
 
   const handleRegisterSuccess = (clientData: any) => {
-    setClient({ ...clientData, hasCompletedTutorial: true });
+    const newClient = { ...clientData, hasCompletedTutorial: true };
+    setClient(newClient);
+    localStorage.setItem("client", JSON.stringify(newClient));
     setAppState("client-dashboard");
   };
 
   const handleClientLogout = () => {
+    // Clear all client data
     setClient(null);
     setSelectedHotel(null);
     setSelectedMerchant(null);
     setCartItems([]);
     setCurrentOrder(null);
     setCustomerRoom("");
+    
+    // Clear localStorage
+    localStorage.removeItem("client");
+    localStorage.removeItem("lastHotel");
+    
     setAppState("auth");
   };
 
@@ -125,15 +172,23 @@ export default function MobileApp() {
 
   const handleHotelScan = async (hotelCode: string) => {
     try {
+      console.log("Scanning hotel code:", hotelCode);
       const hotel = await api.getHotelByCode(hotelCode);
+      console.log("Hotel found:", hotel);
+      
       setSelectedHotel(hotel);
       setLastHotel(hotel); // Save as last hotel
+      
+      // Save last hotel to localStorage
+      localStorage.setItem("lastHotel", JSON.stringify(hotel));
+      
       setAppState("shopping");
       toast({
         title: "Hôtel connecté",
         description: `Bienvenue au ${hotel.name}`,
       });
     } catch (error) {
+      console.error("Hotel scan error:", error);
       toast({
         title: "Erreur",
         description: "Code hôtel invalide",
@@ -178,7 +233,21 @@ export default function MobileApp() {
 
   const handleCheckout = () => {
     if (!selectedHotel || cartItems.length === 0 || !client) return;
-    
+
+    // Vérification du stock pour chaque produit du panier
+    const insufficientStock = cartItems.find(item => {
+      // On suppose que chaque item a un champ 'stock' à jour
+      return typeof item.stock === 'number' && item.quantity > item.stock;
+    });
+    if (insufficientStock) {
+      toast({
+        title: "Stock insuffisant",
+        description: `Le produit ${insufficientStock.name} n'est plus disponible en quantité suffisante.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Show room number modal
     setShowRoomModal(true);
   };

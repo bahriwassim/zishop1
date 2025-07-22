@@ -44,18 +44,29 @@ export default function ClientAuth({ onLogin, onRegisterClick }: ClientAuthProps
     setIsLoading(true);
     
     try {
-      const clientData = await api.loginClient(email, password);
+      console.log("Client login attempt with:", { email });
+      const response = await api.login(email, password);
+      console.log("Client login successful:", response);
       
-      toast({
-        title: "Connexion réussie",
-        description: `Bienvenue ${clientData.firstName}`,
-      });
+      if (!response || !response.email) {
+        throw new Error("Réponse invalide du serveur");
+      }
 
-      onLogin(clientData);
+      // Stocker les informations du client
+      localStorage.setItem("userEmail", response.email);
+      localStorage.setItem("userRole", "client");
+      localStorage.setItem("userId", response.id.toString());
+      localStorage.setItem("userName", response.firstName ? `${response.firstName} ${response.lastName}` : response.email);
+      
+      console.log("Client info stored, redirecting to dashboard");
+      
+      // Appeler onLogin avec les données du client
+      onLogin(response);
     } catch (error) {
+      console.error("Client login error:", error);
       toast({
         title: "Erreur de connexion",
-        description: "Email ou mot de passe incorrect",
+        description: error.message || "Vérifiez vos identifiants.",
         variant: "destructive",
       });
     } finally {
@@ -184,6 +195,15 @@ export default function ClientAuth({ onLogin, onRegisterClick }: ClientAuthProps
           
           <p className="text-xs text-gray-500 mt-3">
             Créez votre compte pour accéder aux meilleurs commerçants locaux
+          </p>
+        </div>
+        
+        {/* Test credentials info */}
+        <div className="mt-6 p-3 bg-blue-50 rounded-lg">
+          <p className="text-xs text-blue-700 text-center">
+            <strong>Identifiants de test:</strong><br/>
+            Email: jean.dupont@example.com<br/>
+            Mot de passe: password123
           </p>
         </div>
       </div>

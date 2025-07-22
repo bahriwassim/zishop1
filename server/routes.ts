@@ -42,11 +42,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hotels", async (req, res) => {
     try {
-      const hotelData = insertHotelSchema.parse(req.body);
+      console.log("Received hotel data:", req.body);
+      
+      // Générer le QR code automatiquement
+      const generateQRCode = (hotelCode: string): string => {
+        return `https://zishop.co/hotel/${hotelCode}`;
+      };
+
+      const hotelDataWithQR = {
+        ...req.body,
+        qrCode: generateQRCode(req.body.code),
+      };
+
+      console.log("Hotel data with QR:", hotelDataWithQR);
+      
+      const hotelData = insertHotelSchema.parse(hotelDataWithQR);
       const hotel = await storage.createHotel(hotelData);
       res.status(201).json(hotel);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid hotel data" });
+    } catch (error: any) {
+      console.error("Error creating hotel:", error);
+      res.status(400).json({ 
+        message: "Invalid hotel data", 
+        error: error.message || error,
+        receivedData: req.body 
+      });
     }
   });
 
@@ -86,11 +105,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/merchants", async (req, res) => {
     try {
+      console.log("Received merchant data:", req.body);
       const merchantData = insertMerchantSchema.parse(req.body);
       const merchant = await storage.createMerchant(merchantData);
       res.status(201).json(merchant);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid merchant data" });
+    } catch (error: any) {
+      console.error("Error creating merchant:", error);
+      res.status(400).json({ 
+        message: "Invalid merchant data", 
+        error: error.message || error,
+        receivedData: req.body 
+      });
     }
   });
 
@@ -164,6 +189,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Endpoint pour la validation des produits par l'admin
+  app.post("/api/products/:id/validate", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { action, note } = req.body;
+      
+      console.log(`Validation produit ${id}: ${action}`, { note });
+      
+      if (!["approve", "reject"].includes(action)) {
+        return res.status(400).json({ message: "Action must be 'approve' or 'reject'" });
+      }
+      
+      // Pour l'instant, nous simulons la validation
+      // Dans une vraie app, cela mettrait à jour un champ 'validationStatus' 
+      const product = await storage.getProduct(id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      
+      // Log de validation pour audit
+      console.log(`Produit ${product.name} ${action === 'approve' ? 'approuvé' : 'rejeté'} par admin`, {
+        productId: id,
+        action,
+        note,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Ici on pourrait envoyer une notification au commerçant
+      // et mettre à jour le statut de validation du produit
+      
+      res.json({ 
+        message: `Product ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
+        product,
+        validation: { action, note, timestamp: new Date().toISOString() }
+      });
+    } catch (error: any) {
+      console.error("Error validating product:", error);
+      res.status(500).json({ message: "Failed to validate product" });
+    }
+  });
+
   // Orders
   app.get("/api/orders", async (req, res) => {
     try {
@@ -230,16 +296,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       const orderData = insertOrderSchema.parse(req.body);
-      
+      // Vérification du stock pour chaque produit commandé
+      if (!Array.isArray(orderData.items)) {
+        return res.status(400).json({ message: "Le champ 'items' doit être un tableau." });
+      }
+      for (const item of orderData.items) {
+        if (!item || typeof item.productId !== "number" || typeof item.quantity !== "number") {
+          return res.status(400).json({ message: "Chaque item doit contenir productId (number) et quantity (number)." });
+        }
+        const product = await storage.getProduct(item.productId);
+        if (!product) {
+          return res.status(400).json({ message: `Produit ID ${item.productId} introuvable.` });
+        }
+        if (typeof product.stock !== "number" || product.stock < item.quantity) {
+          return res.status(400).json({ message: `Stock insuffisant pour le produit ${product.name}. Stock actuel: ${product.stock}, demandé: ${item.quantity}` });
+        }
+      }
+      // Décrémenter le stock de chaque produit
+      for (const item of orderData.items) {
+        const product = await storage.getProduct(item.productId);
+        if (product) {
+          const currentStock = typeof product.stock === "number" ? product.stock : 0;
+          await storage.updateProduct(product.id, { stock: currentStock - item.quantity });
+        }
+      }
       // Calculer automatiquement les commissions selon le cahier des charges
       const totalAmount = parseFloat(orderData.totalAmount as string);
       const merchantCommission = (totalAmount * 0.75).toFixed(2); // 75%
       const zishopCommission = (totalAmount * 0.20).toFixed(2);   // 20% 
       const hotelCommission = (totalAmount * 0.05).toFixed(2);    // 5%
-      
       // Générer un numéro de commande unique
       const orderNumber = `ZS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      
       const enhancedOrderData = {
         ...orderData,
         orderNumber,
@@ -248,12 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hotelCommission,
         status: "pending", // Statut initial selon le workflow
       };
-      
       const order = await storage.createOrder(enhancedOrderData);
-      
-      // TODO: Envoyer une notification au commerçant pour la nouvelle commande
-      // TODO: Créer une entrée dans le système de notifications temps réel
-      
       res.status(201).json(order);
     } catch (error) {
       console.error("Erreur création commande:", error);
@@ -449,6 +531,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch commission stats" });
+    }
+  });
+
+  // Users management endpoints
+  app.get("/api/users", async (req, res) => {
+    try {
+      // Récupérer tous les utilisateurs (sans les mots de passe)
+      // Cette implémentation dépend de votre storage
+      res.json([
+        { id: 1, username: "admin", role: "admin", createdAt: new Date().toISOString() },
+        { id: 2, username: "hotel_paris", role: "hotel", entityId: 1, createdAt: new Date().toISOString() }
+      ]);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const userData = req.body;
+      console.log("Création d'utilisateur:", userData);
+      
+      // Validation basique
+      if (!userData.username || !userData.password || !userData.role) {
+        return res.status(400).json({ message: "Username, password and role are required" });
+      }
+      
+      if (!["admin", "hotel", "merchant"].includes(userData.role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      
+      // Pour les rôles hotel et merchant, entityId est requis
+      if ((userData.role === "hotel" || userData.role === "merchant") && !userData.entityId) {
+        return res.status(400).json({ message: `Entity ID is required for ${userData.role} role` });
+      }
+      
+      // Ici vous créeriez l'utilisateur dans votre base de données
+      // Pour cette démo, nous simulons une création réussie
+      const newUser = {
+        id: Math.floor(Math.random() * 1000),
+        username: userData.username,
+        role: userData.role,
+        entityId: userData.entityId,
+        createdAt: new Date().toISOString()
+      };
+      
+      console.log("Utilisateur créé:", newUser);
+      res.status(201).json(newUser);
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
@@ -709,6 +842,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch admin stats" });
+    }
+  });
+
+  // User Authentication
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password required" });
+      }
+      
+      const user = await storage.authenticateUser(username, password);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Get entity details based on role
+      let entityDetails = null;
+      if (user.role === "hotel" && user.entityId) {
+        entityDetails = await storage.getHotel(user.entityId);
+      } else if (user.role === "merchant" && user.entityId) {
+        entityDetails = await storage.getMerchant(user.entityId);
+      }
+      
+      res.json({
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          entityId: user.entityId,
+        },
+        entity: entityDetails,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", async (req, res) => {
+    // In a real app, you would invalidate the session/token here
+    res.json({ message: "Logged out successfully" });
+  });
+
+  // Hotel-Merchant Associations
+  app.get("/api/hotels/:hotelId/merchants", async (req, res) => {
+    try {
+      const hotelId = parseInt(req.params.hotelId);
+      const associations = await storage.getHotelMerchants(hotelId);
+      
+      // Get merchant details for each association
+      const merchantsWithDetails = await Promise.all(
+        associations.map(async (assoc) => {
+          const merchant = await storage.getMerchant(assoc.merchantId);
+          return {
+            ...assoc,
+            merchant,
+          };
+        })
+      );
+      
+      res.json(merchantsWithDetails);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch hotel merchants" });
+    }
+  });
+
+  app.get("/api/merchants/:merchantId/hotels", async (req, res) => {
+    try {
+      const merchantId = parseInt(req.params.merchantId);
+      const associations = await storage.getMerchantHotels(merchantId);
+      
+      // Get hotel details for each association
+      const hotelsWithDetails = await Promise.all(
+        associations.map(async (assoc) => {
+          const hotel = await storage.getHotel(assoc.hotelId);
+          return {
+            ...assoc,
+            hotel,
+          };
+        })
+      );
+      
+      res.json(hotelsWithDetails);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch merchant hotels" });
+    }
+  });
+
+  app.post("/api/hotel-merchants", async (req, res) => {
+    try {
+      const { hotelId, merchantId } = req.body;
+      
+      if (!hotelId || !merchantId) {
+        return res.status(400).json({ message: "hotelId and merchantId required" });
+      }
+      
+      const association = await storage.addHotelMerchant({
+        hotelId: parseInt(hotelId),
+        merchantId: parseInt(merchantId),
+        isActive: true,
+      });
+      
+      res.status(201).json(association);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create association" });
+    }
+  });
+
+  app.put("/api/hotel-merchants/:hotelId/:merchantId", async (req, res) => {
+    try {
+      const hotelId = parseInt(req.params.hotelId);
+      const merchantId = parseInt(req.params.merchantId);
+      const { isActive } = req.body;
+      
+      const association = await storage.updateHotelMerchant(hotelId, merchantId, isActive);
+      if (!association) {
+        return res.status(404).json({ message: "Association not found" });
+      }
+      
+      res.json(association);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update association" });
+    }
+  });
+
+  app.delete("/api/hotel-merchants/:hotelId/:merchantId", async (req, res) => {
+    try {
+      const hotelId = parseInt(req.params.hotelId);
+      const merchantId = parseInt(req.params.merchantId);
+      
+      const deleted = await storage.removeHotelMerchant(hotelId, merchantId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Association not found" });
+      }
+      
+      res.json({ message: "Association removed successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to remove association" });
     }
   });
 

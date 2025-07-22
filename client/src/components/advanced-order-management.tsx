@@ -75,7 +75,15 @@ export default function AdvancedOrderManagement({
     };
   };
 
-  const getStatusInfo = (status: string) => {
+  const getStatusInfo = (status: string, pickedUp?: boolean) => {
+    if (status === "delivered" && pickedUp) {
+      return {
+        color: "bg-green-700",
+        icon: CheckCircle,
+        text: "Remis au client",
+        description: "Commande remise au client (terminée)"
+      };
+    }
     const statusConfig = {
       pending: { 
         color: "bg-yellow-500", 
@@ -197,7 +205,7 @@ export default function AdvancedOrderManagement({
   return (
     <div className="space-y-4">
       {orders.map((order) => {
-        const statusInfo = getStatusInfo(order.status);
+        const statusInfo = getStatusInfo(order.status, order.pickedUp);
         const StatusIcon = statusInfo.icon;
         const commissions = calculateCommissions(order.totalAmount);
         const actions = getAvailableActions(order);
@@ -283,6 +291,9 @@ export default function AdvancedOrderManagement({
                   )}
                   {order.deliveredAt && (
                     <span>• Livrée: {formatTimestamp(order.deliveredAt)}</span>
+                  )}
+                  {order.pickedUp && order.pickedUpAt && (
+                    <span>• Remise client: {formatTimestamp(order.pickedUpAt)}</span>
                   )}
                 </div>
               </div>

@@ -61,6 +61,9 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "zishop-blue": "hsl(218, 100%, 25%)", // #003D7A
+        "zishop-yellow": "hsl(45, 100%, 50%)", // #FFD700
+        "zishop-blue-light": "hsl(218, 70%, 40%)", // #1E5AA8
       },
       keyframes: {
         "accordion-down": {

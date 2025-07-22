@@ -12,6 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import OrderCard from "@/components/order-card";
 import AdvancedOrderManagement from "@/components/advanced-order-management";
 import MerchantSidebar from "@/components/merchant-sidebar";
+import MerchantHotelsDisplay from "@/components/merchant-hotels-display";
+import MerchantProductManagement from "@/components/merchant-product-management";
 import { Star, ShoppingCart, Box, Building, Plus, Edit, Trash2, Gift, TrendingUp, Euro, Clock } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,7 +29,15 @@ const productSchema = z.object({
 });
 
 export default function MerchantDashboard() {
-  const [selectedMerchantId] = useState(1); // Default to first merchant
+  const [selectedMerchantId] = useState(() => {
+    // Récupérer l'ID du commerçant depuis localStorage
+    const merchantStr = localStorage.getItem("merchant");
+    if (merchantStr) {
+      const merchant = JSON.parse(merchantStr);
+      return merchant.id;
+    }
+    return 1; // Default to first merchant
+  });
   const [activeSection, setActiveSection] = useState("dashboard");
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -303,161 +313,119 @@ export default function MerchantDashboard() {
 
       case "products":
         return (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-800">Mes Souvenirs</h3>
-                <Dialog open={isAddingProduct || !!editingProduct} onOpenChange={(open) => {
-                  if (!open) {
-                    setIsAddingProduct(false);
-                    setEditingProduct(null);
-                    form.reset();
-                  }
-                }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => setIsAddingProduct(true)}>
-                      <Plus className="mr-2" size={16} />
-                      Ajouter souvenir
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>
-                        {editingProduct ? "Modifier le souvenir" : "Ajouter un souvenir"}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmitProduct)} className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Nom du souvenir</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Ex: Tour Eiffel miniature" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} placeholder="Décrivez votre souvenir authentique..." />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="price"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Prix (€)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="category"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Catégorie</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Ex: Monuments, Magnets, Artisanat..." />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="imageUrl"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>URL de l'image</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="https://..." />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <Button type="submit" className="w-full">
-                          {editingProduct ? "Modifier" : "Ajouter"}
-                        </Button>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              <div className="space-y-4">
-                {products.map((product) => (
-                  <div key={product.id} className="flex items-center p-4 border border-gray-200 rounded-lg">
-                    {product.imageUrl && (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-16 h-16 rounded-lg object-cover"
-                      />
-                    )}
-                    <div className="ml-4 flex-1">
-                      <h4 className="font-medium text-gray-800">{product.name}</h4>
-                      <p className="text-sm text-gray-600">{product.description}</p>
-                      <p className="font-semibold text-primary">{product.price}€</p>
-                      <Badge className="text-xs mt-1" variant="outline">{product.category}</Badge>
-                    </div>
-                    <div className="text-right">
-                      <Badge className={product.isAvailable ? "bg-accent" : "bg-red-500"}>
-                        {product.isAvailable ? "En stock" : "Rupture"}
-                      </Badge>
-                      <div className="mt-2 space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditProduct(product)}
-                        >
-                          <Edit size={14} />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteProduct(product.id)}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+          <MerchantProductManagement merchantId={selectedMerchantId}>
+            {products.map(product => (
+              <div key={product.id} className="flex items-center justify-between p-4 border-b last:border-b-0">
+                <div className="flex items-center space-x-4">
+                  {product.imageUrl && (
+                    <img src={product.imageUrl} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
+                  )}
+                  <div>
+                    <h4 className="text-lg font-bold text-gray-800">{product.name}</h4>
+                    <p className="text-sm text-gray-600">{product.description}</p>
+                    <p className="text-sm text-gray-500">Prix: €{product.price}</p>
+                    <p className="text-sm text-gray-500">Catégorie: {product.category}</p>
+                    {typeof product.stock === 'number' && (
+                      <div style={{ fontSize: '0.9em', color: product.stock === 0 ? 'red' : '#555' }}>
+                        Stock restant : {product.stock}
                       </div>
-                    </div>
+                    )}
                   </div>
-                ))}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDeleteProduct(product.id)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </MerchantProductManagement>
         );
 
       case "orders":
         return (
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-6">Gestion des commandes</h3>
-              <AdvancedOrderManagement 
-                orders={orders} 
-                userRole="merchant" 
-                entityId={selectedMerchantId}
-              />
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            {/* Statistiques rapides des commandes */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">En attente</p>
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {orders.filter(o => o.status === "pending").length}
+                      </p>
+                    </div>
+                    <Clock className="text-yellow-600" size={24} />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">En préparation</p>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {orders.filter(o => o.status === "preparing").length}
+                      </p>
+                    </div>
+                    <Box className="text-orange-600" size={24} />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Prêtes</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {orders.filter(o => o.status === "ready").length}
+                      </p>
+                    </div>
+                    <Gift className="text-blue-600" size={24} />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Livrées</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {orders.filter(o => o.status === "delivered").length}
+                      </p>
+                    </div>
+                    <TrendingUp className="text-green-600" size={24} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Workflow des commandes */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-gray-800">Workflow des commandes</h3>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>Commission: 75% du total</span>
+                  </div>
+                </div>
+                <AdvancedOrderManagement 
+                  orders={orders} 
+                  userRole="merchant" 
+                  entityId={selectedMerchantId}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "hotels":
+        return (
+          <MerchantHotelsDisplay merchantId={selectedMerchantId} />
         );
 
       default:

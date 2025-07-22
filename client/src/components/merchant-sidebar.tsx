@@ -15,7 +15,8 @@ import {
   MapPin,
   ChevronDown,
   ChevronUp,
-  Truck
+  Truck,
+  Building
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ export default function MerchantSidebar({ activeSection, onSectionChange }: Merc
     { id: "dashboard", label: "Tableau de bord", icon: Home },
     { id: "products", label: "Mes Produits", icon: Package },
     { id: "orders", label: "Commandes", icon: ShoppingCart, badge: "8" },
+    { id: "hotels", label: "Hôtels Partenaires", icon: Building },
     { id: "analytics", label: "Analytique", icon: BarChart3 },
     { id: "revenue", label: "Revenus", icon: DollarSign },
     { id: "reviews", label: "Avis clients", icon: Star },

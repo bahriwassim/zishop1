@@ -50,12 +50,35 @@ export default function ClientOrderHistory({ clientId, customerName, customerRoo
     },
   });
 
+  // Mutation pour confirmer la remise au client
+  const confirmPickupMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      return await api.updateOrder(orderId, { pickedUp: true, pickedUpAt: new Date().toISOString() });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Commande reçue",
+        description: "Vous avez confirmé la réception de la commande.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/orders/client/history", clientId] });
+    },
+    onError: () => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de confirmer la réception.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const filteredOrders = orders.filter(order => {
     if (statusFilter === "all") return true;
     return order.status === statusFilter;
   });
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, pickedUp?: boolean) => {
+    if (status === "delivered" && pickedUp) return "bg-green-100 text-green-800";
+    if (status === "delivered" && !pickedUp) return "bg-orange-100 text-orange-800";
     switch (status) {
       case "delivered": return "bg-green-100 text-green-800";
       case "cancelled": return "bg-red-100 text-red-800";
@@ -65,7 +88,9 @@ export default function ClientOrderHistory({ clientId, customerName, customerRoo
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, pickedUp?: boolean) => {
+    if (status === "delivered" && pickedUp) return "Remis au client";
+    if (status === "delivered" && !pickedUp) return "En attente de remise";
     switch (status) {
       case "delivered": return "Livré";
       case "cancelled": return "Annulé";
@@ -176,10 +201,10 @@ export default function ClientOrderHistory({ clientId, customerName, customerRoo
                 <CardTitle className="text-sm font-medium">
                   #{order.orderNumber}
                 </CardTitle>
-                <Badge className={getStatusColor(order.status)}>
+                <Badge className={getStatusColor(order.status, order.pickedUp)}>
                   <div className="flex items-center gap-1">
                     {getStatusIcon(order.status)}
-                    {getStatusText(order.status)}
+                    {getStatusText(order.status, order.pickedUp)}
                   </div>
                 </Badge>
               </div>
@@ -236,6 +261,17 @@ export default function ClientOrderHistory({ clientId, customerName, customerRoo
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                )}
+
+                {order.status === "delivered" && !order.pickedUp && (
+                  <Button variant="outline" size="sm" className="flex-1 text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                    onClick={() => confirmPickupMutation.mutate(order.id)}>
+                    ✓ Confirmer réception
+                  </Button>
+                )}
+
+                {order.status === "delivered" && order.pickedUp && (
+                  <span className="flex-1 text-xs text-green-700">Commande terminée</span>
                 )}
 
                 {order.status === "delivered" && (

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, Minus, Plus, X } from "lucide-react";
@@ -22,6 +22,11 @@ export default function ShoppingCartComponent({
   onCheckout,
 }: ShoppingCartProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Persistance du panier dans le localStorage
+  useEffect(() => {
+    localStorage.setItem("cartItems", JSON.stringify(items));
+  }, [items]);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce(
@@ -59,6 +64,11 @@ export default function ShoppingCartComponent({
               <div className="flex-1">
                 <h6 className="font-medium text-sm text-blue-800">{item.name}</h6>
                 <p className="text-xs text-blue-600">{item.price}€ chacun</p>
+                {typeof item.stock === 'number' && (
+                  <div style={{ fontSize: '0.9em', color: item.stock === 0 ? 'red' : '#555' }}>
+                    Stock restant : {item.stock}
+                  </div>
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 <Button

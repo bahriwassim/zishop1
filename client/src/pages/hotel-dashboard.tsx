@@ -8,11 +8,21 @@ import { Badge } from "@/components/ui/badge";
 import OrderCard from "@/components/order-card";
 import AdvancedOrderManagement from "@/components/advanced-order-management";
 import HotelSidebar from "@/components/hotel-sidebar";
+import HotelMerchantSelector from "@/components/hotel-merchant-selector";
+import HotelReception from "@/components/hotel-reception";
 import { QrCode, Download, Gift, MapPin, TrendingUp, Euro, Clock, Truck } from "lucide-react";
 import { api } from "@/lib/api";
 
 export default function HotelDashboard() {
-  const [selectedHotelId] = useState(1); // Default to first hotel
+  const [selectedHotelId] = useState(() => {
+    // Récupérer l'ID de l'hôtel depuis localStorage
+    const hotelStr = localStorage.getItem("hotel");
+    if (hotelStr) {
+      const hotel = JSON.parse(hotelStr);
+      return hotel.id;
+    }
+    return 1; // Default to first hotel
+  });
   const [activeSection, setActiveSection] = useState("dashboard");
   const { toast } = useToast();
 
@@ -96,7 +106,7 @@ export default function HotelDashboard() {
                   <div className="text-right">
                     <div className="bg-primary text-white p-4 rounded-lg">
                       <div className="text-2xl font-bold">€{hotelCommission.toFixed(2)}</div>
-                      <div className="text-sm text-gray-600">Commission aujourd'hui (5%)</div>
+                      <div className="text-sm text-white">Commission aujourd'hui (5%)</div>
                     </div>
                   </div>
                 </div>
@@ -261,6 +271,14 @@ export default function HotelDashboard() {
           </div>
         );
 
+      case "reception":
+        return <HotelReception hotelId={selectedHotelId} />;
+
+      case "merchants":
+        return (
+          <HotelMerchantSelector hotelId={selectedHotelId} />
+        );
+
       default:
         return (
           <Card>
@@ -275,7 +293,7 @@ export default function HotelDashboard() {
 
   return (
     <div className="flex">
-      <HotelSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      <HotelSidebar activeSection={activeSection} onSectionChange={setActiveSection} ordersCount={0} />
       <div className="flex-1 p-8 bg-gray-50">
         {renderDashboardContent()}
       </div>

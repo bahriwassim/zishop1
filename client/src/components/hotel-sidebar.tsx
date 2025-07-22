@@ -14,7 +14,9 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
-  Key
+  Key,
+  Store,
+  Star
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,22 +26,21 @@ import Logo from "./Logo";
 interface HotelSidebarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
+  ordersCount: number;
 }
 
-export default function HotelSidebar({ activeSection, onSectionChange }: HotelSidebarProps) {
+export default function HotelSidebar({ activeSection, onSectionChange, ordersCount }: HotelSidebarProps) {
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
 
   const menuItems = [
     { id: "dashboard", label: "Tableau de bord", icon: Home },
-    { id: "orders", label: "Commandes", icon: ShoppingCart, badge: "12" },
-    { id: "qr-management", label: "Gestion QR", icon: QrCode },
-    { id: "reception", label: "Réception", icon: Key },
-    { id: "analytics", label: "Analytique", icon: BarChart3 },
-    { id: "customers", label: "Clients", icon: Users },
-    { id: "merchants", label: "Commerçants", icon: Package },
-    { id: "revenue", label: "Revenus", icon: DollarSign },
-    { id: "locations", label: "Emplacements", icon: MapPin },
-    { id: "calendar", label: "Calendrier", icon: Calendar },
+    { id: "reception", label: "Réception", icon: Package, badge: ordersCount > 0 ? ordersCount.toString() : undefined },
+    { id: "orders", label: "Commandes", icon: ShoppingCart },
+    { id: "merchants", label: "Partenaires", icon: Store },
+    { id: "guests", label: "Clients", icon: Users },
+    { id: "analytics", label: "Statistiques", icon: BarChart3 },
+    { id: "qrcode", label: "QR Codes", icon: QrCode },
+    { id: "reviews", label: "Avis clients", icon: Star },
     { id: "notifications", label: "Notifications", icon: Bell, badge: "3" },
     { id: "settings", label: "Paramètres", icon: Settings },
   ];

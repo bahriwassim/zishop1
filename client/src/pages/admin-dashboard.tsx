@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import AdminSidebar from "@/components/admin-sidebar";
 import AdvancedOrderManagement from "@/components/advanced-order-management";
-import { Building, Store, ShoppingCart, Users, Clock, Plus, Edit, Gift, TrendingUp, Globe, Euro, AlertTriangle } from "lucide-react";
+import { Building, Store, ShoppingCart, Users, Clock, Plus, Edit, Gift, TrendingUp, Globe, Euro, AlertTriangle, Star } from "lucide-react";
 import { api } from "@/lib/api";
 import { Product, Merchant, Hotel } from '@/types';
 import { ProductValidation } from '@/components/admin/product-validation';
 import { MerchantValidation } from '@/components/admin/merchant-validation';
 import { HotelValidation } from '@/components/admin/hotel-validation';
+import { SimpleUserForm } from '@/components/admin/simple-user-form';
+import { HotelAddForm } from '@/components/admin/hotel-add-form';
+import { MerchantAddForm } from '@/components/admin/merchant-add-form';
+import AdminOrderAnalytics from '@/components/admin/admin-order-analytics';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validationService } from '@/services/validation.service';
 import { toast } from 'sonner';
@@ -20,11 +24,15 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [showHotelForm, setShowHotelForm] = useState(false);
+  const [showMerchantForm, setShowMerchantForm] = useState(false);
   const [loading, setLoading] = useState({
     products: false,
     merchants: false,
     hotels: false
   });
+  
+  const queryClient = useQueryClient();
   
   // Get all data
   const { data: hotelsData = [] } = useQuery({
@@ -35,6 +43,11 @@ export default function AdminDashboard() {
   const { data: orders = [] } = useQuery({
     queryKey: ["/api/orders"],
     queryFn: api.getAllOrders,
+  });
+
+  const { data: merchantsData = [] } = useQuery({
+    queryKey: ["/api/merchants"],
+    queryFn: api.getAllMerchants,
   });
 
   const { data: stats } = useQuery({
@@ -141,7 +154,7 @@ export default function AdminDashboard() {
       setHotels(pendingHotels);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
-      toast.error('Erreur lors du chargement des données');
+      toast.error("Erreur lors du chargement des données");
     } finally {
       setLoading({ products: false, merchants: false, hotels: false });
     }
@@ -320,171 +333,467 @@ export default function AdminDashboard() {
 
       case "hotels":
         return (
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold text-gray-800">Gestion des Hôtels Partenaires</h3>
-                <Button>
-                  <Plus className="mr-2" size={16} />
-                  Nouvel hôtel
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {hotelsData.slice(0, 10).map((hotel) => {
-                  const hotelOrders = orders.filter(o => o.hotelId === hotel.id);
-                  const hotelRevenue = hotelOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
-                  const hotelCommissionAmount = hotelRevenue * 0.05;
-                  
-                  return (
-                    <div key={hotel.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <Building className="text-primary" size={24} />
-                        <div>
-                          <h4 className="font-medium text-gray-800">{hotel.name}</h4>
-                          <p className="text-sm text-gray-600">{hotel.code}</p>
-                          <p className="text-xs text-gray-500">
-                            {hotelOrders.length} commandes • €{hotelCommissionAmount.toFixed(2)} commission
-                          </p>
+          <div className="space-y-6">
+            {showHotelForm ? (
+              <HotelAddForm
+                onSuccess={() => {
+                  setShowHotelForm(false);
+                  // Rafraîchir la liste des hôtels
+                  queryClient.invalidateQueries({ queryKey: ["/api/hotels"] });
+                  toast.success('Liste des hôtels mise à jour');
+                }}
+                onCancel={() => setShowHotelForm(false)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-gray-800">Gestion des Hôtels Partenaires</h3>
+                    <Button onClick={() => setShowHotelForm(true)} className="bg-primary">
+                      <Plus className="mr-2" size={16} />
+                      Nouvel hôtel
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    {hotelsData.slice(0, 10).map((hotel) => {
+                      const hotelOrders = orders.filter(o => o.hotelId === hotel.id);
+                      const hotelRevenue = hotelOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
+                      const hotelCommissionAmount = hotelRevenue * 0.05;
+                      
+                      return (
+                        <div key={hotel.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Building className="text-primary" size={24} />
+                            <div>
+                              <h4 className="font-medium text-gray-800">{hotel.name}</h4>
+                              <p className="text-sm text-gray-600">{hotel.code}</p>
+                              <p className="text-xs text-gray-500">
+                                {hotelOrders.length} commandes • €{hotelCommissionAmount.toFixed(2)} commission
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Badge className="bg-accent text-white">Actif</Badge>
+                            <Button size="sm" variant="outline">
+                              <Edit size={14} />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Badge className="bg-accent text-white">Actif</Badge>
-                        <Button size="sm" variant="outline">
-                          <Edit size={14} />
+                      );
+                    })}
+                    {hotelsData.length === 0 && (
+                      <div className="text-center py-8">
+                        <Building className="mx-auto text-gray-400 mb-4" size={48} />
+                        <p className="text-gray-500">Aucun hôtel enregistré</p>
+                        <Button onClick={() => setShowHotelForm(true)} className="mt-4">
+                          Ajouter le premier hôtel
                         </Button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         );
 
       case "merchants":
+        return (
+          <div className="space-y-6">
+            {showMerchantForm ? (
+              <MerchantAddForm
+                onSuccess={() => {
+                  setShowMerchantForm(false);
+                  // Rafraîchir la liste des commerçants
+                  queryClient.invalidateQueries({ queryKey: ["/api/merchants"] });
+                  toast.success('Liste des commerçants mise à jour');
+                }}
+                onCancel={() => setShowMerchantForm(false)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-gray-800">Gestion des Commerçants</h3>
+                    <Button onClick={() => setShowMerchantForm(true)} className="bg-green-600">
+                      <Plus className="mr-2" size={16} />
+                      Nouveau commerçant
+                    </Button>
+                  </div>
+                  <div className="space-y-4">
+                    {merchantsData.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Store className="mx-auto text-gray-400 mb-4" size={48} />
+                        <p className="text-gray-500">Aucun commerçant enregistré</p>
+                        <Button onClick={() => setShowMerchantForm(true)} className="mt-4">
+                          Ajouter le premier commerçant
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {merchantsData.map((merchant) => (
+                          <Card key={merchant.id}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between mb-2">
+                                <h4 className="font-medium text-gray-800">{merchant.name}</h4>
+                                <Badge className="bg-green-500 text-white text-xs">
+                                  {merchant.isOpen ? 'Ouvert' : 'Fermé'}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">{merchant.category}</p>
+                              <p className="text-xs text-gray-500 mb-2">{merchant.address}</p>
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-gray-500">
+                                  Note: {merchant.rating}/5 ({merchant.reviewCount} avis)
+                                </span>
+                                <Button size="sm" variant="outline">
+                                  <Edit size={14} />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+
+      case "users":
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="text-primary" />
+                  Gestion des Accès Utilisateurs
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <h4 className="font-medium text-blue-800 mb-2">Rôles selon le cahier des charges :</h4>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <p>• <strong>Admin :</strong> Accès complet, supervision globale, validation des entités</p>
+                    <p>• <strong>Hôtel :</strong> Gestion des commandes de l'hôtel, réception, commission 5%</p>
+                    <p>• <strong>Commerçant :</strong> Gestion des produits, commandes, commission 75%</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <SimpleUserForm />
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>API Endpoints</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="bg-gray-100 p-3 rounded text-sm font-mono">
+                          <strong>POST</strong> /api/users<br/>
+                          <span className="text-gray-600">Créer un utilisateur</span>
+                        </div>
+                        <div className="bg-gray-100 p-3 rounded text-sm font-mono">
+                          <strong>GET</strong> /api/users<br/>
+                          <span className="text-gray-600">Lister les utilisateurs</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Les logs de création sont visibles dans la console serveur
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "validation":
+        return (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Validation des produits</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading.products ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {products.map((product) => (
+                      <ProductValidation
+                        key={product.id}
+                        product={product}
+                        onValidate={handleProductValidation}
+                      />
+                    ))}
+                    {products.length === 0 && (
+                      <p className="text-center text-gray-500">Aucun produit en attente de validation</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Validation des commerçants</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading.merchants ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {merchants.map((merchant) => (
+                      <MerchantValidation
+                        key={merchant.id}
+                        merchant={merchant}
+                        onValidate={handleMerchantValidation}
+                      />
+                    ))}
+                    {merchants.length === 0 && (
+                      <p className="text-center text-gray-500">Aucun commerçant en attente de validation</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Validation des hôtels</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading.hotels ? (
+                  <div className="flex justify-center items-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {hotels.map((hotel) => (
+                      <HotelValidation
+                        key={hotel.id}
+                        hotel={hotel}
+                        onValidate={handleHotelValidation}
+                      />
+                    ))}
+                    {hotels.length === 0 && (
+                      <p className="text-center text-gray-500">Aucun hôtel en attente de validation</p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "orders-analytics":
+        return <AdminOrderAnalytics />;
+
+      case "analytics":
         return (
           <Card>
             <CardContent className="p-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-6">Boutiques de Souvenirs</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="p-4">
-                    <h4 className="font-medium text-gray-800">Souvenirs de Paris</h4>
-                    <p className="text-sm text-gray-600">Monuments, magnets, artisanat</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <Badge className="bg-green-500 text-white text-xs">Actif</Badge>
-                      <span className="text-xs text-gray-500">€245 revenus</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <h4 className="font-medium text-gray-800">Art & Craft Paris</h4>
-                    <p className="text-sm text-gray-600">Artisanat local, bijoux</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <Badge className="bg-green-500 text-white text-xs">Actif</Badge>
-                      <span className="text-xs text-gray-500">€189 revenus</span>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4">
-                    <h4 className="font-medium text-gray-800">Galerie Française</h4>
-                    <p className="text-sm text-gray-600">Livres d'art, cartes postales</p>
-                    <div className="flex justify-between items-center mt-2">
-                      <Badge className="bg-green-500 text-white text-xs">Actif</Badge>
-                      <span className="text-xs text-gray-500">€156 revenus</span>
-                    </div>
-                  </CardContent>
-                </Card>
+              <h3 className="text-xl font-semibold text-gray-800 mb-6">Analytiques et Statistiques</h3>
+              <Tabs defaultValue="overview" className="space-y-4">
+                <TabsList>
+                  <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+                  <TabsTrigger value="revenue">Revenus</TabsTrigger>
+                  <TabsTrigger value="performance">Performance</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="overview">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Répartition des revenus</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Commerçants (75%)</span>
+                            <span className="font-bold">€{(totalRevenue * 0.75).toFixed(2)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-green-600 h-2 rounded-full" style={{ width: '75%' }}></div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Zishop (20%)</span>
+                            <span className="font-bold">€{(totalRevenue * 0.20).toFixed(2)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: '20%' }}></div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Hôtels (5%)</span>
+                            <span className="font-bold">€{(totalRevenue * 0.05).toFixed(2)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="bg-purple-600 h-2 rounded-full" style={{ width: '5%' }}></div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Statistiques par période</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Aujourd'hui</span>
+                              <span className="font-bold">{todayOrders.length} commandes</span>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              €{todayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                            </div>
+                          </div>
+                          
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Cette semaine</span>
+                              <span className="font-bold">{weekOrders.length} commandes</span>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              €{weekOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                            </div>
+                          </div>
+                          
+                          <div className="p-3 bg-gray-50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Ce mois</span>
+                              <span className="font-bold">{monthOrders.length} commandes</span>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              €{monthOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="revenue">
+                  <div className="space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Top 5 Hôtels par revenus</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {hotelsData.slice(0, 5).map((hotel) => {
+                            const hotelOrders = orders.filter(o => o.hotelId === hotel.id);
+                            const revenue = hotelOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
+                            return (
+                              <div key={hotel.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                <div>
+                                  <p className="font-medium">{hotel.name}</p>
+                                  <p className="text-sm text-gray-600">{hotelOrders.length} commandes</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold">€{revenue.toFixed(2)}</p>
+                                  <p className="text-xs text-green-600">+€{(revenue * 0.05).toFixed(2)} commission</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="performance">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <TrendingUp className="mx-auto text-green-600 mb-2" size={32} />
+                          <p className="text-sm text-gray-600">Taux de conversion</p>
+                          <p className="text-2xl font-bold">87%</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <Clock className="mx-auto text-blue-600 mb-2" size={32} />
+                          <p className="text-sm text-gray-600">Temps moyen livraison</p>
+                          <p className="text-2xl font-bold">45 min</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-center">
+                          <Star className="mx-auto text-yellow-600 mb-2" size={32} />
+                          <p className="text-sm text-gray-600">Satisfaction client</p>
+                          <p className="text-2xl font-bold">4.8/5</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        );
+
+      case "reversements":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Euro className="text-primary" />
+                Reversements
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Période</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Montant</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Destinataire</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Statut</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-600">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Exemple de données statiques, à remplacer par un mapping sur les reversements réels */}
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-4">Juin 2024</td>
+                      <td className="py-3 px-4">€1,200.00</td>
+                      <td className="py-3 px-4">Commerçant #12</td>
+                      <td className="py-3 px-4 text-green-600">Payé</td>
+                      <td className="py-3 px-4">
+                        <Button size="sm" variant="outline">Exporter CSV</Button>
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3 px-4">Juin 2024</td>
+                      <td className="py-3 px-4">€300.00</td>
+                      <td className="py-3 px-4">Hôtel #5</td>
+                      <td className="py-3 px-4 text-yellow-600">En attente</td>
+                      <td className="py-3 px-4">
+                        <Button size="sm" variant="outline">Exporter CSV</Button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </CardContent>
-          </Card>
-        );
-
-      case "products":
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Validation des produits</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading.products ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zishop-blue"></div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {products.map((product) => (
-                    <ProductValidation
-                      key={product.id}
-                      product={product}
-                      onValidate={handleProductValidation}
-                    />
-                  ))}
-                  {products.length === 0 && (
-                    <p className="text-center text-gray-500">Aucun produit en attente de validation</p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-
-      case "merchants":
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Validation des commerçants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading.merchants ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zishop-blue"></div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {merchants.map((merchant) => (
-                    <MerchantValidation
-                      key={merchant.id}
-                      merchant={merchant}
-                      onValidate={handleMerchantValidation}
-                    />
-                  ))}
-                  {merchants.length === 0 && (
-                    <p className="text-center text-gray-500">Aucun commerçant en attente de validation</p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-
-      case "hotels":
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Validation des hôtels</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading.hotels ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zishop-blue"></div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {hotels.map((hotel) => (
-                    <HotelValidation
-                      key={hotel.id}
-                      hotel={hotel}
-                      onValidate={handleHotelValidation}
-                    />
-                  ))}
-                  {hotels.length === 0 && (
-                    <p className="text-center text-gray-500">Aucun hôtel en attente de validation</p>
-                  )}
-                </div>
-              )}
             </CardContent>
           </Card>
         );

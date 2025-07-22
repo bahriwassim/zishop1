@@ -92,6 +92,7 @@ export default function ClientRegister({ onRegisterSuccess, onBackToLogin }: Cli
     setIsLoading(true);
     
     try {
+      console.log("Attempting client registration:", { email: formData.email, firstName: formData.firstName, lastName: formData.lastName, phone: formData.phone });
       const clientData = await api.registerClient({
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -99,17 +100,28 @@ export default function ClientRegister({ onRegisterSuccess, onBackToLogin }: Cli
         lastName: formData.lastName.trim(),
         phone: formData.phone.trim(),
       });
-
+      console.log("Client registration successful:", clientData);
+      
+      // Store client data in localStorage
+      localStorage.setItem("client", JSON.stringify(clientData));
+      
       toast({
-        title: "Inscription réussie !",
-        description: "Bienvenue sur ZiShop",
+        title: "Compte créé avec succès",
+        description: "Bienvenue sur ZiShop !",
       });
 
       onRegisterSuccess(clientData);
     } catch (error) {
+      console.error("Client registration error:", error);
+      
+      // Better error handling
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Erreur lors de la création du compte";
+      
       toast({
         title: "Erreur d'inscription",
-        description: "Une erreur est survenue. Veuillez réessayer.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

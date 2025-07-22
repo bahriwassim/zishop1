@@ -38,6 +38,9 @@ export const products = pgTable("products", {
   isSouvenir: boolean("is_souvenir").default(false).notNull(),
   origin: text("origin"), // Pays/région d'origine du souvenir
   material: text("material"), // Matériau (bois, métal, textile, etc.)
+  stock: integer("stock").default(100), // Ajout du stock
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const clients = pgTable("clients", {
@@ -71,6 +74,8 @@ export const orders = pgTable("orders", {
   confirmedAt: timestamp("confirmed_at"), // Timestamp de confirmation par le marchand
   deliveredAt: timestamp("delivered_at"), // Timestamp de livraison
   estimatedDelivery: timestamp("estimated_delivery"), // Estimation de livraison
+  pickedUp: boolean("picked_up").default(false), // Si le client a récupéré la commande à la réception
+  pickedUpAt: timestamp("picked_up_at"), // Timestamp de remise au client
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -83,9 +88,17 @@ export const users = pgTable("users", {
   entityId: integer("entity_id"), // references hotels.id or merchants.id
 });
 
+export const hotelMerchants = pgTable("hotel_merchants", {
+  id: serial("id").primaryKey(),
+  hotelId: integer("hotel_id").references(() => hotels.id).notNull(),
+  merchantId: integer("merchant_id").references(() => merchants.id).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertHotelSchema = createInsertSchema(hotels).omit({
   id: true,
-  qrCode: true,
 });
 
 export const insertMerchantSchema = createInsertSchema(merchants).omit({
@@ -115,6 +128,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
 });
 
+export const insertHotelMerchantSchema = createInsertSchema(hotelMerchants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type Hotel = typeof hotels.$inferSelect;
 export type InsertHotel = z.infer<typeof insertHotelSchema>;
 
@@ -132,3 +151,6 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type HotelMerchant = typeof hotelMerchants.$inferSelect;
+export type InsertHotelMerchant = z.infer<typeof insertHotelMerchantSchema>;
