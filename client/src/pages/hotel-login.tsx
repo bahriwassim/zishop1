@@ -38,9 +38,12 @@ export default function HotelLogin() {
         throw new Error("Accès non autorisé");
       }
 
-      // Store user and hotel data in localStorage
+      // Store user, hotel data and token in localStorage
       localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("hotel", JSON.stringify(data.entity));
+      localStorage.setItem("token", data.token);
+      if (data.entity) {
+        localStorage.setItem("hotel", JSON.stringify(data.entity));
+      }
       console.log("Hotel user stored:", data.user); // Debug log
       
       toast.success("Connexion réussie!");

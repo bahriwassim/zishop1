@@ -18,6 +18,8 @@ import NotFound from "@/pages/not-found";
 import Logo from "@/components/Logo";
 import ClientRegister from "@/pages/client-register";
 import TestApi from "@/pages/test-api";
+import TestNotifications from "@/pages/test-notifications";
+import ClientDashboard from "@/pages/client-dashboard";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
   const [location, setLocation] = useLocation();
@@ -80,7 +82,6 @@ function Navigation() {
     { id: "hotel", label: "Dashboard Hôtel", path: "/hotel" },
     { id: "merchant", label: "Dashboard Commerçant", path: "/merchant" },
     { id: "admin", label: "Admin", path: "/admin" },
-    { id: "test", label: "Test Auth", path: "/test" },
   ];
 
   return (
@@ -133,6 +134,41 @@ function Navigation() {
   );
 }
 
+// Wrapper pour ClientRegister compatible avec le routeur
+function ClientRegisterRoute() {
+  const [, setLocation] = useLocation();
+  return (
+    <ClientRegister
+      onRegisterSuccess={() => setLocation("/client-dashboard")}
+      onBackToLogin={() => setLocation("/")}
+    />
+  );
+}
+// Wrapper pour ClientDashboard compatible avec le routeur
+function ClientDashboardRoute() {
+  // Récupérer le client depuis localStorage
+  const clientStr = localStorage.getItem("client");
+  const client = clientStr ? JSON.parse(clientStr) : null;
+  const lastHotelStr = localStorage.getItem("lastHotel");
+  const lastHotel = lastHotelStr ? JSON.parse(lastHotelStr) : null;
+  const [, setLocation] = useLocation();
+  if (!client) {
+    setLocation("/");
+    return null;
+  }
+  return (
+    <ClientDashboard
+      client={client}
+      lastHotel={lastHotel}
+      onLogout={() => {
+        localStorage.removeItem("client");
+        setLocation("/");
+      }}
+      onStartShopping={() => setLocation("/")}
+    />
+  );
+}
+
 function Router() {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -143,13 +179,15 @@ function Router() {
         <Route path="/landing2" component={ClientLandingPage} />
         <Route path="/" component={MobileApp} />
         
-        {/* Test route */}
-        <Route path="/test" component={TestAuth} />
-        
         {/* Login routes */}
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/hotel/login" component={HotelLogin} />
         <Route path="/merchant/login" component={MerchantLogin} />
+        
+        {/* Inscription client */}
+        <Route path="/client/register" component={ClientRegisterRoute} />
+        {/* Dashboard client direct */}
+        <Route path="/client-dashboard" component={ClientDashboardRoute} />
         
         {/* Protected routes */}
         <Route path="/hotel">
@@ -163,143 +201,10 @@ function Router() {
         </Route>
         
         <Route path="/test-api" component={TestApi} />
+        <Route path="/test-notifications" component={TestNotifications} />
         
         <Route component={NotFound} />
       </Switch>
-    </div>
-  );
-}
-
-// Test component for debugging auth
-function TestAuth() {
-  const [userData, setUserData] = useState<any>(null);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [error, setError] = useState<string>("");
-  
-  useEffect(() => {
-    const user = localStorage.getItem("user");
-    const hotel = localStorage.getItem("hotel");
-    const merchant = localStorage.getItem("merchant");
-    
-    setUserData({
-      user: user ? JSON.parse(user) : null,
-      hotel: hotel ? JSON.parse(hotel) : null,
-      merchant: merchant ? JSON.parse(merchant) : null,
-    });
-  }, []);
-  
-  const testApiLogin = async (username: string, password: string) => {
-    setError("");
-    setApiResponse(null);
-    
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      });
-      
-      const data = await response.json();
-      setApiResponse({
-        status: response.status,
-        ok: response.ok,
-        data: data
-      });
-      
-      if (response.ok && data.user) {
-        // Try to store in localStorage manually
-        localStorage.setItem("user", JSON.stringify(data.user));
-        if (data.entity) {
-          if (data.user.role === "hotel") {
-            localStorage.setItem("hotel", JSON.stringify(data.entity));
-          } else if (data.user.role === "merchant") {
-            localStorage.setItem("merchant", JSON.stringify(data.entity));
-          }
-        }
-        // Reload to see the changes
-        setTimeout(() => window.location.reload(), 500);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    }
-  };
-  
-  return (
-    <div className="p-8">
-      <div className="bg-white p-6 rounded shadow mb-4">
-        <h2 className="text-xl font-bold mb-4">Test Auth - LocalStorage:</h2>
-        <pre className="bg-gray-100 p-4 rounded overflow-auto text-sm mb-4">
-          {JSON.stringify(userData, null, 2)}
-        </pre>
-        
-        {apiResponse && (
-          <div className="mb-4">
-            <h3 className="font-bold">API Response:</h3>
-            <pre className="bg-gray-100 p-4 rounded overflow-auto text-sm">
-              {JSON.stringify(apiResponse, null, 2)}
-            </pre>
-          </div>
-        )}
-        
-        {error && (
-          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded">
-            Error: {error}
-          </div>
-        )}
-        
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <button 
-            onClick={() => testApiLogin("admin", "admin123")}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Test API Admin Login
-          </button>
-          <button 
-            onClick={() => testApiLogin("hotel1", "hotel123")}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-          >
-            Test API Hotel Login
-          </button>
-          <button 
-            onClick={() => testApiLogin("merchant1", "merchant123")}
-            className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
-          >
-            Test API Merchant Login
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-4 gap-2">
-          <button 
-            onClick={() => window.location.href = "/admin"}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Go to Admin
-          </button>
-          <button 
-            onClick={() => window.location.href = "/hotel"}
-            className="bg-green-500 text-white px-4 py-2 rounded"
-          >
-            Go to Hotel
-          </button>
-          <button 
-            onClick={() => window.location.href = "/merchant"}
-            className="bg-purple-500 text-white px-4 py-2 rounded"
-          >
-            Go to Merchant
-          </button>
-          <button 
-            onClick={() => {
-              localStorage.clear();
-              window.location.reload();
-            }}
-            className="bg-red-500 text-white px-4 py-2 rounded"
-          >
-            Clear Storage
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

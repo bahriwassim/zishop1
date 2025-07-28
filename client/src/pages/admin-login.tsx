@@ -39,8 +39,9 @@ export default function AdminLogin() {
         throw new Error("Accès non autorisé");
       }
 
-      // Store user data in localStorage
+      // Store user data and token in localStorage
       localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("token", data.token);
       console.log("User stored in localStorage:", data.user); // Debug log
       
       toast.success("Connexion réussie!");

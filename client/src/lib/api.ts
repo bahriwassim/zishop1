@@ -146,6 +146,12 @@ export const api = {
     });
     const data = await response.json();
     console.log("API Login response:", data);
+    
+    // Return the client data directly with token
+    if (data.client && data.token) {
+      localStorage.setItem('token', data.token);
+      return { ...data.client, token: data.token };
+    }
     return data;
   },
 

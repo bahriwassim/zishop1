@@ -18,6 +18,7 @@ import AdminOrderAnalytics from '@/components/admin/admin-order-analytics';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validationService } from '@/services/validation.service';
 import { toast } from 'sonner';
+import { UserManagement } from '@/components/admin/user-management';
 
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -483,7 +484,7 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SimpleUserForm />
+                  <UserManagement hotels={hotelsData} merchants={merchantsData} />
                   <Card>
                     <CardHeader>
                       <CardTitle>API Endpoints</CardTitle>

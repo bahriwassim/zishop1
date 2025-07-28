@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.SUPABASE_URL || 'https://lcyevhpexzcrmbfozqwt.supabase.co'
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeWV2aHBleHpjcm1iZm96cXd0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3OTgzMDIsImV4cCI6MjA2MjM3NDMwMn0.5gdYUTdqzzGvoLRPkYjmyfLW9R5UAwdIuzePxCMj05Y'
+const supabaseUrl = process.env.SUPABASE_URL
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Variables d\'environnement Supabase manquantes')
@@ -27,3 +27,5 @@ export const STORAGE_BUCKETS = {
 } as const
 
 export type StorageBucket = typeof STORAGE_BUCKETS[keyof typeof STORAGE_BUCKETS] 
+
+export default supabase; 

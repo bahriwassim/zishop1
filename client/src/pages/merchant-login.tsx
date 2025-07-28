@@ -38,9 +38,12 @@ export default function MerchantLogin() {
         throw new Error("Accès non autorisé");
       }
 
-      // Store user and merchant data in localStorage
+      // Store user, merchant data and token in localStorage
       localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("merchant", JSON.stringify(data.entity));
+      localStorage.setItem("token", data.token);
+      if (data.entity) {
+        localStorage.setItem("merchant", JSON.stringify(data.entity));
+      }
       console.log("Merchant user stored:", data.user); // Debug log
       
       toast.success("Connexion réussie!");
