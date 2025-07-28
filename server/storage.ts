@@ -15,7 +15,10 @@ const client = postgres(connectionString, {
   ssl: 'require',
   max: 10,
   idle_timeout: 20,
-  connect_timeout: 10
+  connect_timeout: 10,
+  connection: {
+    application_name: 'zishop-app'
+  }
 });
 
 export const db = drizzle(client);

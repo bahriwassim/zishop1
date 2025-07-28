@@ -11,7 +11,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "db:setup": "tsx scripts/setup-supabase.ts",
+    "db:setup": "tsx scripts/setup-database.ts",
     "db:seed": "tsx scripts/seed-data.ts",
     "seed": "tsx scripts/seed-data.ts",
     "setup-storage": "tsx scripts/setup-storage.ts",
@@ -19,7 +19,12 @@
     "generate-icons": "tsx scripts/generate-icons.ts",
     "db:verify": "tsx scripts/verify-and-fix-database.ts",
     "db:test": "tsx scripts/test-database-constraints.ts",
-    "db:fix": "tsx scripts/fix-database-schema.sql"
+    "db:fix": "tsx scripts/fix-database-schema.sql",
+    "test": "tsx scripts/comprehensive-test.ts",
+    "test:constraints": "tsx scripts/verify-database-constraints.ts",
+    "test:db": "tsx scripts/test-database-constraints.ts",
+    "test:report": "tsx scripts/final-test-report.ts",
+    "test:offline": "tsx scripts/verify-constraints-offline.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
