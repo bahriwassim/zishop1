@@ -19,6 +19,12 @@
     "generate-icons": "tsx scripts/generate-icons.ts",
     "db:verify": "tsx scripts/verify-and-fix-database.ts",
     "db:test": "tsx scripts/test-database-constraints.ts",
+    "db:test:comprehensive": "tsx scripts/comprehensive-database-test.ts",
+    "db:setup:constraints": "tsx scripts/setup-database-constraints.ts",
+    "db:test:memory": "tsx scripts/test-memory-storage.ts",
+    "db:test:final": "tsx scripts/final-database-test.ts",
+    "db:test:constraints": "tsx scripts/test-constraints-memory.ts",
+    "db:test:all": "tsx scripts/run-all-tests.ts",
     "db:fix": "tsx scripts/fix-database-schema.sql"
   },
   "dependencies": {
