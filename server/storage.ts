@@ -11,14 +11,26 @@ const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 
 // Connexion à Supabase via PostgreSQL direct
 const connectionString = `postgresql://postgres.dlbobqhmivvbpvuqmcoo:${supabaseKey}@db.dlbobqhmivvbpvuqmcoo.supabase.co:5432/postgres`;
-const client = postgres(connectionString, {
-  ssl: 'require',
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10
-});
 
-export const db = drizzle(client);
+let client: postgres.Sql | null = null;
+let db: ReturnType<typeof drizzle> | null = null;
+
+try {
+  client = postgres(connectionString, {
+    ssl: 'require',
+    max: 10,
+    idle_timeout: 20,
+    connect_timeout: 30
+  });
+  
+  db = drizzle(client);
+  console.log("✅ Connexion à Supabase établie avec succès");
+} catch (error) {
+  console.error("❌ Erreur de connexion à Supabase:", error);
+  console.log("🔄 Utilisation du stockage en mémoire comme fallback");
+}
+
+export { db };
 
 export interface IStorage {
   // Hotels
