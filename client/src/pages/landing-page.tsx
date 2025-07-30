@@ -512,7 +512,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-slate-700 mt-8 pt-8 text-center text-slate-300">
-            <p>&copy; 2024 Zishop. Tous droits réservés.</p>
+            <p>&copy; 2025 Zishop. Tous droits réservés.</p>
           </div>
         </div>
       </footer>

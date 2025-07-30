@@ -66,8 +66,8 @@ export function HotelAddForm({ onSuccess, onCancel }: HotelAddFormProps) {
         code: hotelCode,
         latitude: parseFloat(data.latitude),
         longitude: parseFloat(data.longitude),
-        qrCode: qrCode,
-        isActive: true,
+        qr_code: qrCode,
+        is_active: true,
       };
 
       console.log('Tentative de création d\'hôtel:', hotelData);

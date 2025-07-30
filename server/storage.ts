@@ -1,5 +1,5 @@
 import { Hotel, InsertHotel, Merchant, InsertMerchant, Product, InsertProduct, Order, InsertOrder, User, InsertUser, Client, InsertClient, HotelMerchant, InsertHotelMerchant } from "@shared/schema";
-import { hotels, merchants, products, orders, clients, users, hotelMerchants } from "@shared/schema";
+import { hotels, merchants, products, orders, clients, users, hotel_merchants } from "@shared/schema";
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -89,7 +89,7 @@ export class MemStorage implements IStorage {
   private orders: Map<number, Order> = new Map();
   private users: Map<number, User> = new Map();
   private clients: Map<number, Client> = new Map();
-  private hotelMerchants: Map<number, HotelMerchant> = new Map();
+  private hotel_merchants: Map<number, HotelMerchant> = new Map();
   private currentId = 1;
 
   constructor() {
@@ -121,8 +121,10 @@ export class MemStorage implements IStorage {
       code: "ZI75015",
       latitude: "48.8698679",
       longitude: "2.3072976",
-      qrCode: "QR_ZI75015",
-      isActive: true,
+      qr_code: "QR_ZI75015",
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date(),
     };
     this.hotels.set(hotel1.id, hotel1);
 
@@ -133,8 +135,10 @@ export class MemStorage implements IStorage {
       code: "ZI75001",
       latitude: "48.8708679",
       longitude: "2.3312976",
-      qrCode: "QR_ZI75001",
-      isActive: true,
+      qr_code: "QR_ZI75001",
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date(),
     };
     this.hotels.set(hotel2.id, hotel2);
 
@@ -145,8 +149,10 @@ export class MemStorage implements IStorage {
       code: "ZI75003",
       latitude: "48.8558679",
       longitude: "2.3552976",
-      qrCode: "QR_ZI75003",
-      isActive: true,
+      qr_code: "QR_ZI75003",
+      is_active: true,
+      created_at: new Date(),
+      updated_at: new Date(),
     };
     this.hotels.set(hotel3.id, hotel3);
 
@@ -361,7 +367,7 @@ export class MemStorage implements IStorage {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      this.hotelMerchants.set(association.id, association);
+      this.hotel_merchants.set(association.id, association);
     });
   }
 
@@ -390,8 +396,10 @@ export class MemStorage implements IStorage {
         code: insertHotel.code,
         latitude: insertHotel.latitude?.toString() || "0",
         longitude: insertHotel.longitude?.toString() || "0",
-        qrCode: insertHotel.qrCode,
-        isActive: true
+        qr_code: insertHotel.qr_code,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       this.hotels.set(fakeHotel.id, fakeHotel);
@@ -691,11 +699,11 @@ export class MemStorage implements IStorage {
 
   // Hotel-Merchant associations
   async getHotelMerchants(hotelId: number): Promise<HotelMerchant[]> {
-    return Array.from(this.hotelMerchants.values()).filter(hm => hm.hotelId === hotelId && hm.isActive);
+    return Array.from(this.hotel_merchants.values()).filter(hm => hm.hotel_id === hotelId && hm.is_active);
   }
 
   async getMerchantHotels(merchantId: number): Promise<HotelMerchant[]> {
-    return Array.from(this.hotelMerchants.values()).filter(hm => hm.merchantId === merchantId && hm.isActive);
+    return Array.from(this.hotel_merchants.values()).filter(hm => hm.merchant_id === merchantId && hm.is_active);
   }
 
   async addHotelMerchant(association: InsertHotelMerchant): Promise<HotelMerchant> {
@@ -708,13 +716,13 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    this.hotelMerchants.set(id, hotelMerchant);
+          this.hotel_merchants.set(id, hotelMerchant);
     return hotelMerchant;
   }
 
   async updateHotelMerchant(hotelId: number, merchantId: number, isActive: boolean): Promise<HotelMerchant | undefined> {
-    const association = Array.from(this.hotelMerchants.values()).find(
-      hm => hm.hotelId === hotelId && hm.merchantId === merchantId
+    const association = Array.from(this.hotel_merchants.values()).find(
+      hm => hm.hotel_id === hotelId && hm.merchant_id === merchantId
     );
     if (!association) return undefined;
     association.isActive = isActive;
@@ -723,11 +731,11 @@ export class MemStorage implements IStorage {
   }
 
   async removeHotelMerchant(hotelId: number, merchantId: number): Promise<boolean> {
-    const association = Array.from(this.hotelMerchants.entries()).find(
-      ([_, hm]) => hm.hotelId === hotelId && hm.merchantId === merchantId
+    const association = Array.from(this.hotel_merchants.entries()).find(
+      ([_, hm]) => hm.hotel_id === hotelId && hm.merchant_id === merchantId
     );
     if (!association) return false;
-    return this.hotelMerchants.delete(association[0]);
+    return this.hotel_merchants.delete(association[0]);
   }
 }
 
@@ -978,36 +986,38 @@ export class PostgresStorage implements IStorage {
     return user;
   }
   async getHotelMerchants(hotelId: number): Promise<HotelMerchant[]> {
-    return await db.select().from(hotelMerchants).where(
-      sql`hotelId = ${hotelId} AND isActive = true`
+    return await db.select().from(hotel_merchants).where(
+      sql`hotel_id = ${hotelId} AND is_active = true`
     );
   }
   async getMerchantHotels(merchantId: number): Promise<HotelMerchant[]> {
-    return await db.select().from(hotelMerchants).where(
-      sql`merchantId = ${merchantId} AND isActive = true`
+    return await db.select().from(hotel_merchants).where(
+      sql`merchant_id = ${merchantId} AND is_active = true`
     );
   }
   async addHotelMerchant(association: InsertHotelMerchant): Promise<HotelMerchant> {
-    const [created] = await db.insert(hotelMerchants).values({
+    const [created] = await db.insert(hotel_merchants).values({
       ...association,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      created_at: new Date(),
+      updated_at: new Date(),
     }).returning();
     if (!created) throw new Error('Erreur lors de l\'ajout de l\'association Hotel-Merchant');
     return created;
   }
   async updateHotelMerchant(hotelId: number, merchantId: number, isActive: boolean): Promise<HotelMerchant | undefined> {
-    const [updated] = await db.update(hotelMerchants).set({ isActive, updatedAt: new Date() }).where(
-      sql`hotelId = ${hotelId} AND merchantId = ${merchantId}`
+    const [updated] = await db.update(hotel_merchants).set({ is_active: isActive, updated_at: new Date() }).where(
+      sql`hotel_id = ${hotelId} AND merchant_id = ${merchantId}`
     ).returning();
     return updated;
   }
   async removeHotelMerchant(hotelId: number, merchantId: number): Promise<boolean> {
-    const result = await db.delete(hotelMerchants).where(
-      sql`hotelId = ${hotelId} AND merchantId = ${merchantId}`
+    const result = await db.delete(hotel_merchants).where(
+      sql`hotel_id = ${hotelId} AND merchant_id = ${merchantId}`
     ).returning();
     return result.length > 0;
   }
 }
 
-export const storage = new PostgresStorage();
+// Force MemStorage for development/testing to avoid database connection issues
+export const storage = new MemStorage();
+console.log('🔧 Using MemStorage for development/testing');

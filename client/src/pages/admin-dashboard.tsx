@@ -19,6 +19,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validationService } from '@/services/validation.service';
 import { toast } from 'sonner';
 import { UserManagement } from '@/components/admin/user-management';
+import AnalyticsDashboard from '@/components/admin/analytics-dashboard';
+import TestRealScenarios from '@/components/test-real-scenarios';
+import { DebugPanel } from '@/components/debug-panel';
 
 export default function AdminDashboard() {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -36,10 +39,16 @@ export default function AdminDashboard() {
   const queryClient = useQueryClient();
   
   // Get all data
-  const { data: hotelsData = [] } = useQuery({
+  const { data: hotelsData = [], isLoading: hotelsLoading, refetch: refetchHotels } = useQuery({
     queryKey: ["/api/hotels"],
     queryFn: api.getHotels,
+    refetchInterval: 5000, // Rafraîchir toutes les 5 secondes
   });
+
+  // Debug: Afficher les données des hôtels
+  console.log('🔍 Debug - Hotels Data:', hotelsData);
+  console.log('🔍 Debug - Hotels Loading:', hotelsLoading);
+  console.log('🔍 Debug - Hotels Count:', hotelsData.length);
 
   const { data: orders = [] } = useQuery({
     queryKey: ["/api/orders"],
@@ -75,13 +84,13 @@ export default function AdminDashboard() {
   // Calculate recent activities
   const recentOrders = orders
     .slice(0, 10)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const recentActivities = recentOrders.map(order => ({
     id: order.id,
     type: "order",
-    description: `Nouvelle commande #${order.orderNumber} pour €${order.totalAmount}`,
-    time: getRelativeTime(order.createdAt),
+    description: `Nouvelle commande #${order.order_number} pour €${order.total_amount}`,
+    time: getRelativeTime(order.created_at),
   }));
 
   function getRelativeTime(date: Date | string): string {
@@ -105,34 +114,34 @@ export default function AdminDashboard() {
   };
 
   // Calculate financial data
-  const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
+  const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
   const zishopCommission = totalRevenue * 0.20;
   const hotelCommission = totalRevenue * 0.05;
   const merchantRevenue = totalRevenue * 0.75;
 
   const todayOrders = orders.filter(order => {
     const today = new Date();
-    const orderDate = new Date(order.createdAt);
+    const orderDate = new Date(order.created_at);
     return orderDate.toDateString() === today.toDateString();
   });
 
   const weekOrders = orders.filter(order => {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const orderDate = new Date(order.createdAt);
+    const orderDate = new Date(order.created_at);
     return orderDate >= weekAgo;
   });
 
   const monthOrders = orders.filter(order => {
     const monthAgo = new Date();
     monthAgo.setMonth(monthAgo.getMonth() - 1);
-    const orderDate = new Date(order.createdAt);
+    const orderDate = new Date(order.created_at);
     return orderDate >= monthAgo;
   });
 
   // Filtrer les commandes problématiques
   const problematicOrders = orders.filter(order => 
-    order.status === "pending" && new Date().getTime() - new Date(order.createdAt).getTime() > 24 * 60 * 60 * 1000 // Plus de 24h en attente
+    order.status === "pending" && new Date().getTime() - new Date(order.created_at).getTime() > 24 * 60 * 60 * 1000 // Plus de 24h en attente
   );
 
   // Charger les données en attente de validation
@@ -332,6 +341,8 @@ export default function AdminDashboard() {
           </Card>
         );
 
+
+
       case "hotels":
         return (
           <div className="space-y-6">
@@ -340,6 +351,8 @@ export default function AdminDashboard() {
                 onSuccess={() => {
                   setShowHotelForm(false);
                   // Rafraîchir la liste des hôtels
+                  refetchHotels();
+                  // Forcer le rafraîchissement du cache
                   queryClient.invalidateQueries({ queryKey: ["/api/hotels"] });
                   toast.success('Liste des hôtels mise à jour');
                 }}
@@ -355,34 +368,48 @@ export default function AdminDashboard() {
                       Nouvel hôtel
                     </Button>
                   </div>
+                  
+                  {/* Panel de Debug */}
+                  <DebugPanel 
+                    hotelsData={hotelsData}
+                    merchantsData={merchantsData}
+                    orders={orders}
+                    hotelsLoading={hotelsLoading}
+                  />
                   <div className="space-y-4">
-                    {hotelsData.slice(0, 10).map((hotel) => {
-                      const hotelOrders = orders.filter(o => o.hotelId === hotel.id);
-                      const hotelRevenue = hotelOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
-                      const hotelCommissionAmount = hotelRevenue * 0.05;
-                      
-                      return (
-                        <div key={hotel.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <Building className="text-primary" size={24} />
-                            <div>
-                              <h4 className="font-medium text-gray-800">{hotel.name}</h4>
-                              <p className="text-sm text-gray-600">{hotel.code}</p>
-                              <p className="text-xs text-gray-500">
-                                {hotelOrders.length} commandes • €{hotelCommissionAmount.toFixed(2)} commission
-                              </p>
+                    {hotelsLoading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-gray-500">Chargement des hôtels...</p>
+                      </div>
+                    ) : hotelsData.length > 0 ? (
+                      hotelsData.slice(0, 10).map((hotel) => {
+                        const hotelOrders = orders.filter(o => o.hotel_id === hotel.id);
+                        const hotelRevenue = hotelOrders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
+                        const hotelCommissionAmount = hotelRevenue * 0.05;
+                        
+                        return (
+                          <div key={hotel.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <Building className="text-primary" size={24} />
+                              <div>
+                                <h4 className="font-medium text-gray-800">{hotel.name}</h4>
+                                <p className="text-sm text-gray-600">{hotel.code}</p>
+                                <p className="text-xs text-gray-500">
+                                  {hotelOrders.length} commandes • €{hotelCommissionAmount.toFixed(2)} commission
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Badge className="bg-accent text-white">Actif</Badge>
+                              <Button size="sm" variant="outline">
+                                <Edit size={14} />
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex space-x-2">
-                            <Badge className="bg-accent text-white">Actif</Badge>
-                            <Button size="sm" variant="outline">
-                              <Edit size={14} />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {hotelsData.length === 0 && (
+                        );
+                      })
+                    ) : (
                       <div className="text-center py-8">
                         <Building className="mx-auto text-gray-400 mb-4" size={48} />
                         <p className="text-gray-500">Aucun hôtel enregistré</p>
@@ -438,14 +465,14 @@ export default function AdminDashboard() {
                               <div className="flex items-start justify-between mb-2">
                                 <h4 className="font-medium text-gray-800">{merchant.name}</h4>
                                 <Badge className="bg-green-500 text-white text-xs">
-                                  {merchant.isOpen ? 'Ouvert' : 'Fermé'}
+                                  {merchant.is_open ? 'Ouvert' : 'Fermé'}
                                 </Badge>
                               </div>
                               <p className="text-sm text-gray-600 mb-2">{merchant.category}</p>
                               <p className="text-xs text-gray-500 mb-2">{merchant.address}</p>
                               <div className="flex justify-between items-center">
                                 <span className="text-xs text-gray-500">
-                                  Note: {merchant.rating}/5 ({merchant.reviewCount} avis)
+                                  Note: {merchant.rating}/5 ({merchant.review_count} avis)
                                 </span>
                                 <Button size="sm" variant="outline">
                                   <Edit size={14} />
@@ -525,16 +552,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {products.map((product) => (
-                      <ProductValidation
-                        key={product.id}
-                        product={product}
-                        onValidate={handleProductValidation}
-                      />
-                    ))}
-                    {products.length === 0 && (
-                      <p className="text-center text-gray-500">Aucun produit en attente de validation</p>
-                    )}
+                    <ProductValidation />
                   </div>
                 )}
               </CardContent>
@@ -551,16 +569,7 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {merchants.map((merchant) => (
-                      <MerchantValidation
-                        key={merchant.id}
-                        merchant={merchant}
-                        onValidate={handleMerchantValidation}
-                      />
-                    ))}
-                    {merchants.length === 0 && (
-                      <p className="text-center text-gray-500">Aucun commerçant en attente de validation</p>
-                    )}
+                    <MerchantValidation />
                   </div>
                 )}
               </CardContent>
@@ -577,25 +586,13 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    {hotels.map((hotel) => (
-                      <HotelValidation
-                        key={hotel.id}
-                        hotel={hotel}
-                        onValidate={handleHotelValidation}
-                      />
-                    ))}
-                    {hotels.length === 0 && (
-                      <p className="text-center text-gray-500">Aucun hôtel en attente de validation</p>
-                    )}
+                    <HotelValidation />
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
         );
-
-      case "orders-analytics":
-        return <AdminOrderAnalytics />;
 
       case "analytics":
         return (
@@ -656,7 +653,7 @@ export default function AdminDashboard() {
                               <span className="font-bold">{todayOrders.length} commandes</span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              €{todayOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                              €{todayOrders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0).toFixed(2)}
                             </div>
                           </div>
                           
@@ -666,7 +663,7 @@ export default function AdminDashboard() {
                               <span className="font-bold">{weekOrders.length} commandes</span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              €{weekOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                              €{weekOrders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0).toFixed(2)}
                             </div>
                           </div>
                           
@@ -676,7 +673,7 @@ export default function AdminDashboard() {
                               <span className="font-bold">{monthOrders.length} commandes</span>
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              €{monthOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0).toFixed(2)}
+                              €{monthOrders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0).toFixed(2)}
                             </div>
                           </div>
                         </div>
@@ -694,8 +691,8 @@ export default function AdminDashboard() {
                       <CardContent>
                         <div className="space-y-3">
                           {hotelsData.slice(0, 5).map((hotel) => {
-                            const hotelOrders = orders.filter(o => o.hotelId === hotel.id);
-                            const revenue = hotelOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount), 0);
+                            const hotelOrders = orders.filter(o => o.hotel_id === hotel.id);
+                            const revenue = hotelOrders.reduce((sum, o) => sum + parseFloat(o.total_amount), 0);
                             return (
                               <div key={hotel.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
                                 <div>
@@ -798,6 +795,12 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         );
+
+      case "tests":
+        return <TestRealScenarios />;
+
+      case "analytics":
+        return <AnalyticsDashboard hotels={hotelsData} merchants={merchantsData} orders={orders} stats={stats} />;
 
       default:
         return (

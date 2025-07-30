@@ -3,7 +3,7 @@ import type { Hotel, Merchant, Product, Order, InsertOrder, Client, InsertClient
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { AdminProductValidation, AdminMerchantValidation, AdminHotelValidation } from '@/types';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://localhost:5000/api';
 
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -40,11 +40,16 @@ async function fetchWithErrorHandling(url: string, options?: RequestInit) {
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+      console.error("API Error:", error);
+      
+      // Créer une erreur avec les détails de la réponse
+      const apiError = new Error(error.message || `HTTP error! status: ${response.status}`);
+      (apiError as any).response = { data: error, status: response.status };
+      throw apiError;
     }
     
     return response;
-  } catch (error) {
+  } catch (error: any) {
     if (error.message.includes("Failed to fetch")) {
       throw new Error("Impossible de se connecter au serveur. Vérifiez que le serveur est démarré sur le port 5000.");
     }
@@ -58,7 +63,7 @@ export const api = {
     axiosInstance.get('/hotels').then(res => res.data),
   
   getHotelByCode: (code: string): Promise<Hotel> =>
-    axiosInstance.get(`/hotels/${code}`).then(res => res.data),
+    axiosInstance.get(`/hotels/code/${code}`).then(res => res.data),
 
   // Merchants
   getMerchantsNearHotel: (hotelId: number, radius: number = 3): Promise<Merchant[]> =>
@@ -97,7 +102,7 @@ export const api = {
     axiosInstance.get(`/orders/${id}`).then(res => res.data),
 
   createOrder: (order: InsertOrder): Promise<Order> =>
-    apiRequest("POST", "/orders", order).then((res) => res.json()),
+    axiosInstance.post("/orders", order).then(res => res.data),
 
   updateOrder: (id: number, updates: any): Promise<Order> =>
     apiRequest("PUT", `/orders/${id}`, updates).then((res) => res.json()),
@@ -116,16 +121,16 @@ export const api = {
   getOrdersByCustomer: (customerName: string, customerRoom: string): Promise<Order[]> =>
     axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => 
-        order.customerName === customerName && 
-        order.customerRoom === customerRoom
+        order.customer_name === customerName && 
+        order.customer_room === customerRoom
       )
     ),
 
   getActiveOrdersByCustomer: (customerName: string, customerRoom: string): Promise<Order[]> =>
     axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => 
-        order.customerName === customerName && 
-        order.customerRoom === customerRoom &&
+        order.customer_name === customerName && 
+        order.customer_room === customerRoom &&
         order.status !== 'delivered'
       )
     ),
@@ -139,12 +144,8 @@ export const api = {
   // Client authentication and management
   async login(email: string, password: string) {
     console.log("API Login attempt:", { email });
-    const response = await fetchWithErrorHandling("/api/clients/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await response.json();
+    const response = await axiosInstance.post('/clients/login', { email, password });
+    const data = response.data;
     console.log("API Login response:", data);
     
     // Return the client data directly with token
@@ -156,7 +157,7 @@ export const api = {
   },
 
   registerClient: (clientData: InsertClient): Promise<Client> =>
-    apiRequest("POST", "/clients/register", clientData).then((res) => res.json()),
+    axiosInstance.post('/clients/register', clientData).then(res => res.data),
 
   getClient: (id: number): Promise<Client> =>
     axiosInstance.get(`/clients/${id}`).then(res => res.data),
@@ -189,7 +190,7 @@ export const api = {
   getOrdersByDateRange: (startDate: string, endDate: string): Promise<Order[]> =>
     axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => {
-        const orderDate = new Date(order.createdAt);
+        const orderDate = new Date(order.created_at);
         return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
       })
     ),

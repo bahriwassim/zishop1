@@ -96,8 +96,8 @@ export default function ClientRegister({ onRegisterSuccess, onBackToLogin }: Cli
       const clientData = await api.registerClient({
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
         phone: formData.phone.trim(),
       });
       console.log("Client registration successful:", clientData);
@@ -111,16 +111,31 @@ export default function ClientRegister({ onRegisterSuccess, onBackToLogin }: Cli
       });
 
       onRegisterSuccess(clientData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Client registration error:", error);
       
-      // Better error handling
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : "Erreur lors de la création du compte";
+      // Gestion améliorée des erreurs
+      let errorMessage = "Erreur lors de la création du compte";
+      let errorTitle = "Erreur d'inscription";
+      
+      if (error?.response?.data) {
+        const errorData = error.response.data;
+        
+        if (errorData.error === "EMAIL_EXISTS") {
+          errorTitle = "Email déjà utilisé";
+          errorMessage = "Un compte avec cet email existe déjà. Veuillez vous connecter ou utiliser un autre email.";
+        } else if (errorData.error === "VALIDATION_ERROR" && errorData.errors) {
+          errorTitle = "Données invalides";
+          errorMessage = errorData.errors.map((err: any) => `${err.field}: ${err.message}`).join(", ");
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       
       toast({
-        title: "Erreur d'inscription",
+        title: errorTitle,
         description: errorMessage,
         variant: "destructive",
       });

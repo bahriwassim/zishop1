@@ -46,9 +46,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Hotel data with QR:", req.body);
       
-      // Convert coordinates to strings before validation
+      // Clean and prepare hotel data
+      const { qrCode, isActive, ...cleanData } = req.body;
       const hotelData = {
-        ...req.body,
+        ...cleanData,
         latitude: req.body.latitude?.toString() || "0",
         longitude: req.body.longitude?.toString() || "0"
       };
@@ -301,6 +302,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/orders", requireAuth, async (req, res) => {
     try {
+      console.log("=== DONNÉES REÇUES PAR LE SERVEUR ===");
+      console.log("req.body:", JSON.stringify(req.body, null, 2));
+      console.log("=====================================");
+      
       const orderData = insertOrderSchema.parse(req.body);
       // Vérification du stock pour chaque produit commandé
       if (!Array.isArray(orderData.items)) {
@@ -336,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       // Calculer automatiquement les commissions selon le cahier des charges
-      const totalAmount = parseFloat(orderData.totalAmount as string);
+      const totalAmount = parseFloat(orderData.total_amount as string);
       const merchantCommission = (totalAmount * 0.75).toFixed(2); // 75%
       const zishopCommission = (totalAmount * 0.20).toFixed(2);   // 20% 
       const hotelCommission = (totalAmount * 0.05).toFixed(2);    // 5%
@@ -640,15 +645,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clients
   app.post("/api/clients/register", async (req, res) => {
     try {
+      console.log("Client registration request:", req.body);
+      
       const clientData = insertClientSchema.parse(req.body);
+      console.log("Validated client data:", clientData);
+      
+      // Vérifier si l'email existe déjà
+      const existingClient = await storage.getClientByEmail(clientData.email);
+      if (existingClient) {
+        return res.status(400).json({ 
+          message: "Un compte avec cet email existe déjà",
+          error: "EMAIL_EXISTS"
+        });
+      }
+      
       const client = await storage.createClient(clientData);
+      console.log("Client created successfully:", { id: client.id, email: client.email });
       
       // Don't return password in response
       const { password, ...clientResponse } = client;
       res.status(201).json({ client: clientResponse });
     } catch (error: any) {
       console.error("Client registration error:", error);
-      res.status(400).json({ message: "Invalid client data", error: error.message });
+      
+      // Gestion spécifique des erreurs de validation
+      if (error.name === 'ZodError') {
+        const validationErrors = error.errors.map((err: any) => ({
+          field: err.path.join('.'),
+          message: err.message
+        }));
+        
+        return res.status(400).json({ 
+          message: "Données invalides",
+          errors: validationErrors,
+          error: "VALIDATION_ERROR"
+        });
+      }
+      
+      res.status(400).json({ 
+        message: "Erreur lors de la création du compte", 
+        error: error.message 
+      });
     }
   });
 

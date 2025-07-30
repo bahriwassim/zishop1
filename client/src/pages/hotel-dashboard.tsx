@@ -10,6 +10,7 @@ import AdvancedOrderManagement from "@/components/advanced-order-management";
 import HotelSidebar from "@/components/hotel-sidebar";
 import HotelMerchantSelector from "@/components/hotel-merchant-selector";
 import HotelReception from "@/components/hotel-reception";
+import HotelGuests from "@/components/hotel-guests";
 import { QrCode, Download, Gift, MapPin, TrendingUp, Euro, Clock, Truck } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -75,12 +76,12 @@ export default function HotelDashboard() {
 
   const todayOrders = orders.filter(order => {
     const today = new Date();
-    const orderDate = new Date(order.createdAt);
+    const orderDate = new Date(order.created_at);
     return orderDate.toDateString() === today.toDateString();
   });
 
   // Calcul de la commission hôtel (5%)
-  const todayRevenue = todayOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount), 0);
+  const todayRevenue = todayOrders.reduce((sum, order) => sum + parseFloat(order.total_amount), 0);
   const hotelCommission = todayRevenue * 0.05;
 
   if (!hotel) {
@@ -165,7 +166,7 @@ export default function HotelDashboard() {
                     <div className="ml-4">
                       <p className="text-sm text-gray-600">Chambres actives</p>
                       <p className="text-2xl font-bold text-gray-800">
-                        {new Set(todayOrders.map(order => order.customerRoom)).size}
+                        {new Set(todayOrders.map(order => order.customer_room)).size}
                       </p>
                     </div>
                   </div>
@@ -277,6 +278,88 @@ export default function HotelDashboard() {
       case "merchants":
         return (
           <HotelMerchantSelector hotelId={selectedHotelId} />
+        );
+
+      case "guests":
+        return (
+          <HotelGuests hotelId={selectedHotelId} />
+        );
+
+      case "analytics":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Statistiques détaillées</h3>
+              <p className="text-gray-600 mt-2">Analyses approfondies des performances de l'hôtel.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "qrcode":
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">QR Code Hôtel</h3>
+                <div className="text-center">
+                  <div className="bg-gray-50 p-4 rounded-lg inline-block mb-4">
+                    <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <QrCode className="text-4xl text-gray-400" size={64} />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">QR Code pour accès souvenirs locaux</p>
+                  <Button className="bg-primary text-white">
+                    <Download className="mr-2" size={16} />
+                    Télécharger QR
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Instructions QR & Commission</h3>
+                <div className="space-y-3 text-sm text-gray-600">
+                  <p>• Placez le QR code à la réception</p>
+                  <p>• Les clients scannent pour accéder aux souvenirs</p>
+                  <p>• Rayon de 3km autour de l'hôtel</p>
+                  <p>• Livraison directe à la réception</p>
+                  <p className="font-semibold text-purple-600">• Commission de 5% sur chaque vente</p>
+                  <p>• Paiement centralisé via Zishop</p>
+                  <p>• Reversement automatique mensuel</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
+      case "reviews":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Avis clients</h3>
+              <p className="text-gray-600 mt-2">Gestion et suivi des avis clients de l'hôtel.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "notifications":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Notifications</h3>
+              <p className="text-gray-600 mt-2">Gestion des notifications et alertes de l'hôtel.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "settings":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Paramètres</h3>
+              <p className="text-gray-600 mt-2">Configuration de l'hôtel et préférences.</p>
+            </CardContent>
+          </Card>
         );
 
       default:

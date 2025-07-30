@@ -14,6 +14,10 @@ import AdvancedOrderManagement from "@/components/advanced-order-management";
 import MerchantSidebar from "@/components/merchant-sidebar";
 import MerchantHotelsDisplay from "@/components/merchant-hotels-display";
 import MerchantProductManagement from "@/components/merchant-product-management";
+import MerchantAnalytics from "@/components/merchant-analytics";
+import MerchantRevenue from "@/components/merchant-revenue";
+import MerchantReviews from "@/components/merchant-reviews";
+import MerchantDelivery from "@/components/merchant-delivery";
 import { Star, ShoppingCart, Box, Building, Plus, Edit, Trash2, Gift, TrendingUp, Euro, Clock } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -313,36 +317,7 @@ export default function MerchantDashboard() {
 
       case "products":
         return (
-          <MerchantProductManagement merchantId={selectedMerchantId}>
-            {products.map(product => (
-              <div key={product.id} className="flex items-center justify-between p-4 border-b last:border-b-0">
-                <div className="flex items-center space-x-4">
-                  {product.imageUrl && (
-                    <img src={product.imageUrl} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
-                  )}
-                  <div>
-                    <h4 className="text-lg font-bold text-gray-800">{product.name}</h4>
-                    <p className="text-sm text-gray-600">{product.description}</p>
-                    <p className="text-sm text-gray-500">Prix: €{product.price}</p>
-                    <p className="text-sm text-gray-500">Catégorie: {product.category}</p>
-                    {typeof product.stock === 'number' && (
-                      <div style={{ fontSize: '0.9em', color: product.stock === 0 ? 'red' : '#555' }}>
-                        Stock restant : {product.stock}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDeleteProduct(product.id)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </MerchantProductManagement>
+          <MerchantProductManagement merchantId={selectedMerchantId} />
         );
 
       case "orders":
@@ -426,6 +401,66 @@ export default function MerchantDashboard() {
       case "hotels":
         return (
           <MerchantHotelsDisplay merchantId={selectedMerchantId} />
+        );
+
+      case "analytics":
+        return (
+          <MerchantAnalytics merchantId={selectedMerchantId} />
+        );
+
+      case "revenue":
+        return (
+          <MerchantRevenue merchantId={selectedMerchantId} />
+        );
+
+      case "reviews":
+        return (
+          <MerchantReviews merchantId={selectedMerchantId} />
+        );
+
+      case "delivery":
+        return (
+          <MerchantDelivery merchantId={selectedMerchantId} />
+        );
+
+      case "schedule":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Gestion des horaires</h3>
+              <p className="text-gray-600 mt-2">Configuration des horaires d'ouverture et de livraison.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "location":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Gestion de l'emplacement</h3>
+              <p className="text-gray-600 mt-2">Configuration de votre zone de livraison et adresse.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "notifications":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Notifications</h3>
+              <p className="text-gray-600 mt-2">Gestion des notifications et alertes.</p>
+            </CardContent>
+          </Card>
+        );
+
+      case "settings":
+        return (
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-xl font-semibold text-gray-800">Paramètres</h3>
+              <p className="text-gray-600 mt-2">Configuration de votre compte et préférences.</p>
+            </CardContent>
+          </Card>
         );
 
       default:

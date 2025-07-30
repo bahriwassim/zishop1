@@ -109,6 +109,8 @@ export const hotel_merchants = pgTable("hotel_merchants", {
 
 export const insertHotelSchema = createInsertSchema(hotels).omit({
   id: true,
+  created_at: true,
+  updated_at: true,
 }).transform((data) => ({
   ...data,
   latitude: data.latitude?.toString() || "0",
@@ -127,12 +129,12 @@ export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
 });
 
-export const insertClientSchema = createInsertSchema(clients).omit({
-  id: true,
-  is_active: true,
-  has_completed_tutorial: true,
-  created_at: true,
-  updated_at: true,
+export const insertClientSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  first_name: z.string().min(2),
+  last_name: z.string().min(2),
+  phone: z.string(),
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({
@@ -162,7 +164,7 @@ export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 
 export type Client = typeof clients.$inferSelect;
-export type InsertClient = z.infer<typeof insertClientSchema>;
+export type InsertClient = z.input<typeof insertClientSchema>;
 
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;

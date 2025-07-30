@@ -19,6 +19,7 @@ import Logo from "@/components/Logo";
 import ClientRegister from "@/pages/client-register";
 import TestApi from "@/pages/test-api";
 import TestNotifications from "@/pages/test-notifications";
+import TestRealScenarios from "@/pages/test-real-scenarios";
 import ClientDashboard from "@/pages/client-dashboard";
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: React.ComponentType; allowedRoles: string[] }) {
@@ -202,6 +203,7 @@ function Router() {
         
         <Route path="/test-api" component={TestApi} />
         <Route path="/test-notifications" component={TestNotifications} />
+        <Route path="/test-real-scenarios" component={TestRealScenarios} />
         
         <Route component={NotFound} />
       </Switch>

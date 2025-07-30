@@ -148,6 +148,12 @@ export default function MobileApp() {
     setClient(newClient);
     localStorage.setItem("client", JSON.stringify(newClient));
     setAppState("client-dashboard");
+    
+    // Afficher un message de succès
+    toast({
+      title: "Compte créé avec succès",
+      description: `Bienvenue ${newClient.firstName} !`,
+    });
   };
 
   const handleClientLogout = () => {
@@ -262,7 +268,7 @@ export default function MobileApp() {
 
     // Group items by merchant
     const merchantOrders = cartItems.reduce((acc, item) => {
-      const merchantId = item.merchantId;
+      const merchantId = item.merchant_id;
       if (!acc[merchantId]) {
         acc[merchantId] = [];
       }
@@ -278,15 +284,24 @@ export default function MobileApp() {
     // Create order for the first merchant (simplified for MVP)
     const firstMerchantId = Object.keys(merchantOrders)[0];
     const orderData = {
-      hotelId: selectedHotel!.id,
-      merchantId: parseInt(firstMerchantId),
-      clientId: client.id,
-      customerName: `${client.firstName} ${client.lastName}`,
-      customerRoom: roomNumber,
+      hotel_id: selectedHotel!.id,
+      merchant_id: parseInt(firstMerchantId),
+      client_id: client.id,
+      customer_name: `${client.firstName} ${client.lastName}`,
+      customer_room: roomNumber,
       items: merchantOrders[parseInt(firstMerchantId)],
-      totalAmount: totalAmount.toFixed(2),
+      total_amount: totalAmount.toFixed(2),
       status: "pending",
     };
+
+    console.log("=== DONNÉES DE COMMANDE ENVOYÉES ===");
+    console.log("orderData:", JSON.stringify(orderData, null, 2));
+    console.log("selectedHotel:", selectedHotel);
+    console.log("client:", client);
+    console.log("roomNumber:", roomNumber);
+    console.log("totalAmount:", totalAmount);
+    console.log("merchantOrders:", merchantOrders);
+    console.log("=====================================");
 
     createOrderMutation.mutate(orderData);
   };
@@ -509,7 +524,7 @@ export default function MobileApp() {
           <h4 className="font-semibold text-gray-800 mb-3">Produits populaires</h4>
           <div className="space-y-4">
             {popularProducts.map((product) => {
-              const merchant = merchants.find(m => m.id === product.merchantId);
+              const merchant = merchants.find(m => m.id === product.merchant_id);
               return (
                 <ProductCard
                   key={product.id}
