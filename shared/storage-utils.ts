@@ -21,8 +21,21 @@ export async function uploadImage(options: UploadImageOptions): Promise<UploadIm
   try {
     const { file, bucket, path, upsert = false } = options
     
+    console.log('Début upload:', { bucket, fileName: file.name, size: file.size })
+    
+    // Vérifier la configuration Supabase
+    if (!supabase) {
+      console.error('Client Supabase non initialisé')
+      return {
+        success: false,
+        error: 'Configuration Supabase manquante'
+      }
+    }
+    
     // Générer un nom de fichier unique si pas de path fourni
     const fileName = path || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${file.name.split('.').pop()}`
+    
+    console.log('Nom de fichier généré:', fileName)
     
     // Upload du fichier
     const { data, error } = await supabase.storage
@@ -33,17 +46,21 @@ export async function uploadImage(options: UploadImageOptions): Promise<UploadIm
       })
 
     if (error) {
-      console.error('Erreur upload:', error)
+      console.error('Erreur upload Supabase:', error)
       return {
         success: false,
-        error: error.message
+        error: `Erreur Supabase: ${error.message}`
       }
     }
+
+    console.log('Upload réussi, données:', data)
 
     // Récupérer l'URL publique
     const { data: urlData } = supabase.storage
       .from(bucket)
       .getPublicUrl(fileName)
+
+    console.log('URL publique générée:', urlData.publicUrl)
 
     return {
       success: true,

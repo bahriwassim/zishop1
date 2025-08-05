@@ -6,8 +6,10 @@ import Logo from "@/components/Logo";
 import ClientOrderHistory from "@/components/client-order-history";
 import ClientProfile from "@/components/client-profile";
 import ClientCurrentOrders from "@/components/client-current-orders";
+import { GeolocationWidget } from "@/components/geolocation-widget";
 import { ShoppingBag, User, Clock, QrCode, LogOut } from "lucide-react";
 import { api } from "@/lib/api";
+import { Location } from "@/services/geolocation.service";
 
 interface ClientDashboardProps {
   client: any;
@@ -23,6 +25,7 @@ export default function ClientDashboard({
   onStartShopping 
 }: ClientDashboardProps) {
   const [activeTab, setActiveTab] = useState("current");
+  const [userLocation, setUserLocation] = useState<Location | null>(null);
   const customerName = `${client.firstName} ${client.lastName}`;
 
   return (
@@ -92,6 +95,11 @@ export default function ClientDashboard({
 
           <div className="mt-4">
             <TabsContent value="current" className="space-y-4">
+              <GeolocationWidget 
+                onLocationUpdate={setUserLocation}
+                showDetails={false}
+                className="mb-4"
+              />
               <ClientCurrentOrders 
                 clientId={client.id}
                 customerName={customerName} 

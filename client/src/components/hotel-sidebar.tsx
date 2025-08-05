@@ -34,13 +34,10 @@ export default function HotelSidebar({ activeSection, onSectionChange, ordersCou
 
   const menuItems = [
     { id: "dashboard", label: "Tableau de bord", icon: Home },
-    { id: "reception", label: "Réception", icon: Package, badge: ordersCount > 0 ? ordersCount.toString() : undefined },
-    { id: "orders", label: "Commandes", icon: ShoppingCart },
+    { id: "orders", label: "Commandes clients", icon: ShoppingCart, badge: ordersCount > 0 ? ordersCount.toString() : undefined },
     { id: "merchants", label: "Partenaires", icon: Store },
-    { id: "guests", label: "Clients", icon: Users },
     { id: "analytics", label: "Statistiques", icon: BarChart3 },
     { id: "qrcode", label: "QR Codes", icon: QrCode },
-    { id: "reviews", label: "Avis clients", icon: Star },
     { id: "notifications", label: "Notifications", icon: Bell, badge: "3" },
     { id: "settings", label: "Paramètres", icon: Settings },
   ];

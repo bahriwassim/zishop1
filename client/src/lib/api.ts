@@ -65,12 +65,30 @@ export const api = {
   getHotelByCode: (code: string): Promise<Hotel> =>
     axiosInstance.get(`/hotels/code/${code}`).then(res => res.data),
 
+  createHotel: (hotel: any): Promise<Hotel> =>
+    axiosInstance.post('/hotels', hotel).then(res => res.data),
+
+  updateHotel: (id: number, updates: any): Promise<Hotel> =>
+    axiosInstance.put(`/hotels/${id}`, updates).then(res => res.data),
+
+  deleteHotel: (id: number): Promise<void> =>
+    axiosInstance.delete(`/hotels/${id}`).then(() => {}),
+
   // Merchants
   getMerchantsNearHotel: (hotelId: number, radius: number = 3): Promise<Merchant[]> =>
     axiosInstance.get(`/merchants/near/${hotelId}?radius=${radius}`).then(res => res.data),
 
   getAllMerchants: (): Promise<Merchant[]> =>
     axiosInstance.get('/merchants').then(res => res.data),
+
+  createMerchant: (merchant: any): Promise<Merchant> =>
+    axiosInstance.post('/merchants', merchant).then(res => res.data),
+
+  updateMerchant: (id: number, updates: any): Promise<Merchant> =>
+    axiosInstance.put(`/merchants/${id}`, updates).then(res => res.data),
+
+  deleteMerchant: (id: number): Promise<void> =>
+    axiosInstance.delete(`/merchants/${id}`).then(() => {}),
 
   // Products
   getProductsByMerchant: (merchantId: number): Promise<Product[]> =>
@@ -80,13 +98,13 @@ export const api = {
     axiosInstance.get('/products').then(res => res.data),
 
   createProduct: (product: any): Promise<Product> =>
-    apiRequest("POST", "/products", product).then((res) => res.json()),
+    axiosInstance.post('/products', product).then(res => res.data),
 
   updateProduct: (id: number, updates: any): Promise<Product> =>
-    apiRequest("PUT", `/products/${id}`, updates).then((res) => res.json()),
+    axiosInstance.put(`/products/${id}`, updates).then(res => res.data),
 
   deleteProduct: (id: number): Promise<void> =>
-    apiRequest("DELETE", `/products/${id}`).then(() => {}),
+    axiosInstance.delete(`/products/${id}`).then(() => {}),
 
   // Orders
   getOrdersByHotel: (hotelId: number): Promise<Order[]> =>
@@ -105,10 +123,10 @@ export const api = {
     axiosInstance.post("/orders", order).then(res => res.data),
 
   updateOrder: (id: number, updates: any): Promise<Order> =>
-    apiRequest("PUT", `/orders/${id}`, updates).then((res) => res.json()),
+    axiosInstance.put(`/orders/${id}`, updates).then(res => res.data),
 
   updateOrderStatus: (id: number, status: string): Promise<Order> =>
-    apiRequest("PUT", `/orders/${id}`, { status }).then((res) => res.json()),
+    axiosInstance.put(`/orders/${id}`, { status }).then(res => res.data),
 
   // Workflow et commission endpoints
   getOrderWorkflow: (): Promise<any> =>
@@ -163,7 +181,7 @@ export const api = {
     axiosInstance.get(`/clients/${id}`).then(res => res.data),
 
   updateClient: (id: number, updates: Partial<Client>): Promise<Client> =>
-    apiRequest("PUT", `/clients/${id}`, updates).then((res) => res.json()),
+    axiosInstance.put(`/clients/${id}`, updates).then(res => res.data),
 
   getClientStats: (clientId: number): Promise<any> =>
     axiosInstance.get(`/clients/${clientId}/stats`).then(res => res.data),

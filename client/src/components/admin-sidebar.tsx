@@ -43,6 +43,7 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     { id: "dashboard", label: "Vue d'ensemble", icon: Home },
     { id: "hotels", label: "Gestion Hôtels", icon: Building },
     { id: "merchants", label: "Gestion Commerçants", icon: Store },
+    { id: "hotel-merchants", label: "Association Hôtel-Commerçants", icon: Globe },
     { id: "orders", label: "Toutes les commandes", icon: ShoppingCart },
     { id: "users", label: "Gestion Accès", icon: Users },
     { id: "validation", label: "Validation Entités", icon: Shield },

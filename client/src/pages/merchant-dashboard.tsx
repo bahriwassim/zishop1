@@ -278,7 +278,7 @@ export default function MerchantDashboard() {
                       <Euro className="text-purple-600" size={24} />
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm text-gray-600">Commission (75%)</p>
+                      <p className="text-sm text-gray-600">Votre commission (75%)</p>
                       <p className="text-2xl font-bold text-gray-800">€{(parseFloat(stats?.dailyRevenue || "0") * 0.75).toFixed(2)}</p>
                     </div>
                   </div>
@@ -385,7 +385,7 @@ export default function MerchantDashboard() {
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-semibold text-gray-800">Workflow des commandes</h3>
                   <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Commission: 75% du total</span>
+                    <span>Votre part: 75% du total</span>
                   </div>
                 </div>
                 <AdvancedOrderManagement 
@@ -396,6 +396,11 @@ export default function MerchantDashboard() {
               </CardContent>
             </Card>
           </div>
+        );
+
+      case "products":
+        return (
+          <MerchantProductManagement merchantId={selectedMerchantId} />
         );
 
       case "hotels":

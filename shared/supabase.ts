@@ -1,13 +1,28 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.SUPABASE_URL
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY
+// Récupération des variables d'environnement avec fallback
+const supabaseUrl = process.env.SUPABASE_URL || import.meta.env?.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY
+
+console.log('Configuration Supabase:', {
+  url: supabaseUrl ? 'Définie' : 'Manquante',
+  key: supabaseAnonKey ? 'Définie' : 'Manquante'
+})
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Variables d\'environnement Supabase manquantes')
+  console.error('Variables d\'environnement Supabase manquantes')
+  console.error('SUPABASE_URL:', supabaseUrl)
+  console.error('SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Définie' : 'Manquante')
+  
+  // En mode développement, utiliser des valeurs par défaut pour les tests
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('Mode développement: utilisation de valeurs par défaut pour les tests')
+  } else {
+    throw new Error('Variables d\'environnement Supabase manquantes')
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder-key', {
   db: {
     schema: 'public'
   },
@@ -20,10 +35,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 // Configuration pour les buckets storage
 export const STORAGE_BUCKETS = {
-  HOTELS: 'hotels',
-  MERCHANTS: 'merchants', 
-  PRODUCTS: 'products',
-  AVATARS: 'avatars'
+  hotels: 'hotels',
+  merchants: 'merchants', 
+  products: 'products',
+  avatars: 'avatars'
 } as const
 
 export type StorageBucket = typeof STORAGE_BUCKETS[keyof typeof STORAGE_BUCKETS] 

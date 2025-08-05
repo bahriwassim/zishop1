@@ -42,14 +42,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/hotels", requireAuth, requireRole('admin'), async (req, res) => {
+  app.post("/api/hotels", async (req, res) => {
     try {
-      console.log("Hotel data with QR:", req.body);
+      console.log("Hotel data received:", req.body);
+      
+      // Generate unique hotel code if not provided
+      const hotelCode = req.body.code || `ZI${Date.now().toString().slice(-6)}`;
+      
+      // Generate QR code automatically
+      const qrCode = `https://zishop.co/hotel/${hotelCode}`;
       
       // Clean and prepare hotel data
-      const { qrCode, isActive, ...cleanData } = req.body;
       const hotelData = {
-        ...cleanData,
+        ...req.body,
+        code: hotelCode,
+        qr_code: qrCode,
         latitude: req.body.latitude?.toString() || "0",
         longitude: req.body.longitude?.toString() || "0"
       };
@@ -60,6 +67,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating hotel:", error);
       res.status(400).json({ message: "Invalid hotel data", error: error.message });
+    }
+  });
+
+  app.put("/api/hotels/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = {
+        ...req.body,
+        latitude: req.body.latitude?.toString(),
+        longitude: req.body.longitude?.toString(),
+        updated_at: new Date()
+      };
+      
+      const hotel = await storage.updateHotel(id, updates);
+      if (!hotel) {
+        return res.status(404).json({ message: "Hotel not found" });
+      }
+      res.json(hotel);
+    } catch (error: any) {
+      console.error("Error updating hotel:", error);
+      res.status(500).json({ message: "Failed to update hotel", error: error.message });
     }
   });
 
@@ -97,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/merchants", requireAuth, async (req, res) => {
+  app.post("/api/merchants", async (req, res) => {
     try {
       console.log("Received merchant data:", req.body);
       
@@ -114,6 +142,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error creating merchant:", error);
       res.status(400).json({ message: "Invalid merchant data", error: error.message });
+    }
+  });
+
+  app.put("/api/merchants/:id", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const updates = {
+        ...req.body,
+        latitude: req.body.latitude?.toString(),
+        longitude: req.body.longitude?.toString(),
+        updated_at: new Date()
+      };
+      
+      const merchant = await storage.updateMerchant(id, updates);
+      if (!merchant) {
+        return res.status(404).json({ message: "Merchant not found" });
+      }
+      res.json(merchant);
+    } catch (error: any) {
+      console.error("Error updating merchant:", error);
+      res.status(500).json({ message: "Failed to update merchant", error: error.message });
     }
   });
 
@@ -150,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", requireAuth, async (req, res) => {
+  app.post("/api/products", async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(productData);
@@ -207,10 +256,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mettre à jour le statut de validation du produit
       const validationStatus = action === 'approve' ? 'approved' : 'rejected';
       const updates = {
-        validationStatus,
-        rejectionReason: action === 'reject' ? note : null,
-        validatedAt: new Date(),
-        validatedBy: req.user!.id
+        validation_status: validationStatus,
+        rejection_reason: action === 'reject' ? note : null,
+        validated_at: new Date(),
+        validated_by: req.user!.id
       };
       
       const updatedProduct = await storage.updateProduct(id, updates);
@@ -300,13 +349,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/orders", requireAuth, async (req, res) => {
+  app.post("/api/orders", async (req, res) => {
     try {
       console.log("=== DONNÉES REÇUES PAR LE SERVEUR ===");
       console.log("req.body:", JSON.stringify(req.body, null, 2));
       console.log("=====================================");
       
       const orderData = insertOrderSchema.parse(req.body);
+      
+      // Transformer les données pour le storage
+      const transformedOrderData = {
+        hotel_id: orderData.hotelId,
+        merchant_id: orderData.merchantId,
+        client_id: orderData.clientId || null,
+        customer_name: orderData.customerName,
+        customer_room: orderData.customerRoom,
+        items: orderData.items,
+        total_amount: orderData.totalAmount,
+        status: orderData.status || "pending",
+        delivery_notes: orderData.deliveryNotes || "",
+        estimated_delivery: orderData.estimatedDelivery ? new Date(orderData.estimatedDelivery) : null,
+        merchant_commission: null,
+        zishop_commission: null,
+        hotel_commission: null,
+        confirmed_at: null,
+        delivered_at: null,
+        picked_up: false,
+        picked_up_at: null,
+      };
+      
       // Vérification du stock pour chaque produit commandé
       if (!Array.isArray(orderData.items)) {
         return res.status(400).json({ message: "Le champ 'items' doit être un tableau." });
@@ -341,18 +412,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       // Calculer automatiquement les commissions selon le cahier des charges
-      const totalAmount = parseFloat(orderData.total_amount as string);
+      const totalAmount = parseFloat(orderData.totalAmount);
       const merchantCommission = (totalAmount * 0.75).toFixed(2); // 75%
       const zishopCommission = (totalAmount * 0.20).toFixed(2);   // 20% 
       const hotelCommission = (totalAmount * 0.05).toFixed(2);    // 5%
       // Générer un numéro de commande unique
       const orderNumber = `ZS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
       const enhancedOrderData = {
-        ...orderData,
-        orderNumber,
-        merchantCommission,
-        zishopCommission,
-        hotelCommission,
+        ...transformedOrderData,
+        order_number: orderNumber,
+        merchant_commission: merchantCommission,
+        zishop_commission: zishopCommission,
+        hotel_commission: hotelCommission,
         status: "pending", // Statut initial selon le workflow
       };
       const order = await storage.createOrder(enhancedOrderData);
@@ -361,9 +432,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       notificationService.notifyNewOrder(order);
       
       res.status(201).json(order);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erreur création commande:", error);
-      res.status(400).json({ message: "Invalid order data" });
+      console.error("Détails de l'erreur:", JSON.stringify(error, null, 2));
+      res.status(400).json({ message: "Invalid order data", details: error.message });
     }
   });
 
@@ -424,11 +496,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                  notificationService.notifyOrderUpdate({
            type: 'order_update',
            orderId: order.id,
-           orderNumber: order.orderNumber,
+           orderNumber: order.order_number,
            status: updates.status,
-           hotelId: order.hotelId,
-           merchantId: order.merchantId,
-           clientId: order.clientId || undefined,
+           hotelId: order.hotel_id,
+           merchantId: order.merchant_id,
+           clientId: order.client_id || undefined,
            message: statusMessages[updates.status] || `Statut de commande mis à jour: ${updates.status}`
          });
       }
@@ -520,17 +592,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       switch (period) {
         case "today":
           filteredOrders = orders.filter(order => {
-            const orderDate = new Date(order.createdAt);
+            const orderDate = new Date(order.created_at);
             return orderDate.toDateString() === now.toDateString();
           });
           break;
         case "week":
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          filteredOrders = orders.filter(order => new Date(order.createdAt) >= weekAgo);
+          filteredOrders = orders.filter(order => new Date(order.created_at) >= weekAgo);
           break;
         case "month":
           const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          filteredOrders = orders.filter(order => new Date(order.createdAt) >= monthAgo);
+          filteredOrders = orders.filter(order => new Date(order.created_at) >= monthAgo);
           break;
       }
       
@@ -545,7 +617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stats = filteredOrders
         .filter(order => !["cancelled"].includes(order.status))
         .reduce((acc: StatsAccumulator, order) => {
-          const total = parseFloat(order.totalAmount);
+          const total = parseFloat(order.total_amount);
           acc.totalRevenue += total;
           acc.merchantCommission += total * 0.75;
           acc.zishopCommission += total * 0.20;
@@ -577,14 +649,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users management endpoints
-  app.get("/api/users", requireAuth, requireRole('admin'), async (req, res) => {
+  app.get("/api/users", async (req, res) => {
     try {
       const users = await storage.getAllUsers();
-      // Ne pas retourner les mots de passe
-      const usersResponse = users.map((user) => {
+      
+      // Enrichir les utilisateurs avec les informations d'entité et formater les dates
+      const usersResponse = await Promise.all(users.map(async (user) => {
         const { password, ...userWithoutPassword } = user;
-        return userWithoutPassword;
-      });
+        
+        // Formater les dates avec des valeurs par défaut
+        const formattedUser: any = {
+          ...userWithoutPassword,
+          created_at: userWithoutPassword.created_at ? new Date(userWithoutPassword.created_at).toISOString() : new Date().toISOString(),
+          updated_at: userWithoutPassword.updated_at ? new Date(userWithoutPassword.updated_at).toISOString() : new Date().toISOString(),
+          entityId: userWithoutPassword.entity_id // Ajouter entityId pour la compatibilité
+        };
+        
+        // Ajouter les informations d'entité
+        if (user.role === "hotel" && user.entity_id) {
+          const hotel = await storage.getHotel(user.entity_id);
+          if (hotel) {
+            formattedUser.entityName = hotel.name;
+            formattedUser.entityDescription = hotel.address;
+          } else {
+            formattedUser.entityName = "Hôtel non trouvé";
+            formattedUser.entityDescription = "Non assigné";
+          }
+        } else if (user.role === "merchant" && user.entity_id) {
+          const merchant = await storage.getMerchant(user.entity_id);
+          if (merchant) {
+            formattedUser.entityName = merchant.name;
+            formattedUser.entityDescription = merchant.address;
+          } else {
+            formattedUser.entityName = "Commerçant non trouvé";
+            formattedUser.entityDescription = "Non assigné";
+          }
+        } else if (user.role === "admin") {
+          formattedUser.entityName = "Administrateur";
+          formattedUser.entityDescription = "Admin global";
+        } else if (user.role === "hotel" && !user.entity_id) {
+          formattedUser.entityName = "Hôtel";
+          formattedUser.entityDescription = "Non assigné";
+        } else if (user.role === "merchant" && !user.entity_id) {
+          formattedUser.entityName = "Commerçant";
+          formattedUser.entityDescription = "Non assigné";
+        } else {
+          formattedUser.entityName = "Non assigné";
+          formattedUser.entityDescription = "Non assigné";
+        }
+        
+        return formattedUser;
+      }));
+      
       res.json(usersResponse);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -592,7 +708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", requireAuth, requireRole('admin'), async (req, res) => {
+  app.post("/api/users", async (req, res) => {
     try {
       const userData = req.body;
       console.log("Création d'utilisateur:", userData);
@@ -629,16 +745,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
         username: userData.username,
         password: userData.password,
         role: userData.role,
-        entityId: userData.entityId || null
+        entity_id: userData.entityId || null
       });
       
-      // Ne pas retourner le mot de passe
+      // Ne pas retourner le mot de passe et formater les dates
       const { password, ...userResponse } = newUser;
-      console.log("Utilisateur créé:", userResponse);
-      res.status(201).json(userResponse);
+      
+      // Formater les dates pour l'affichage et corriger entityId
+      const formattedResponse = {
+        ...userResponse,
+        created_at: userResponse.created_at ? new Date(userResponse.created_at).toISOString() : null,
+        updated_at: userResponse.updated_at ? new Date(userResponse.updated_at).toISOString() : null,
+        entityId: userResponse.entity_id // Ajouter entityId pour la compatibilité
+      };
+      
+      console.log("Utilisateur créé:", formattedResponse);
+      res.status(201).json(formattedResponse);
     } catch (error: any) {
       console.error("Error creating user:", error);
       res.status(500).json({ message: "Failed to create user", error: error.message });
+    }
+  });
+
+  // Modification d'utilisateur
+  app.put("/api/users/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const userData = req.body;
+      console.log("Modification d'utilisateur:", userId, userData);
+      
+      // Validation basique
+      if (!userData.username || !userData.role) {
+        return res.status(400).json({ message: "Username and role are required" });
+      }
+      
+      if (!["admin", "hotel", "merchant"].includes(userData.role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      
+      // Pour les rôles hotel et merchant, entityId est requis
+      if ((userData.role === "hotel" || userData.role === "merchant") && !userData.entityId) {
+        return res.status(400).json({ message: `Entity ID is required for ${userData.role} role` });
+      }
+
+      // Vérifier que l'entité existe
+      if (userData.role === "hotel") {
+        const hotel = await storage.getHotel(userData.entityId);
+        if (!hotel) {
+          return res.status(400).json({ message: "Hotel not found" });
+        }
+      } else if (userData.role === "merchant") {
+        const merchant = await storage.getMerchant(userData.entityId);
+        if (!merchant) {
+          return res.status(400).json({ message: "Merchant not found" });
+        }
+      }
+      
+      // Préparer les données de mise à jour
+      const updateData: any = {
+        username: userData.username,
+        role: userData.role,
+        entity_id: userData.entityId || null,
+        updated_at: new Date()
+      };
+      
+      // Ajouter le mot de passe seulement s'il est fourni
+      if (userData.password) {
+        updateData.password = userData.password;
+      }
+      
+      // Mettre à jour l'utilisateur
+      const updatedUser = await storage.updateUser(userId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Ne pas retourner le mot de passe et formater les dates
+      const { password, ...userResponse } = updatedUser;
+      
+      // Formater les dates pour l'affichage et corriger entityId
+      const formattedResponse = {
+        ...userResponse,
+        created_at: userResponse.created_at ? new Date(userResponse.created_at).toISOString() : null,
+        updated_at: userResponse.updated_at ? new Date(userResponse.updated_at).toISOString() : null,
+        entityId: userResponse.entity_id // Ajouter entityId pour la compatibilité
+      };
+      
+      console.log("Utilisateur modifié:", formattedResponse);
+      res.json(formattedResponse);
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user", error: error.message });
+    }
+  });
+
+  // Suppression d'utilisateur
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      console.log("Suppression d'utilisateur:", userId);
+      
+      const success = await storage.deleteUser(userId);
+      if (!success) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      console.log("Utilisateur supprimé:", userId);
+      res.json({ message: "User deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user", error: error.message });
     }
   });
 
@@ -1001,39 +1217,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // BYPASS AUTHENTICATION FOR TESTING - Accept any username/password
       console.log(`[TEST MODE] Login attempt for user: ${username}`);
       
-      // Create fake user based on username
-      let role: 'admin' | 'hotel' | 'merchant' | 'client' = 'client';
-      let entityId = 1;
+      // Use the corrected authenticateUser function
+      const user = await authenticateUser(username, password);
       
-      if (username.toLowerCase().includes('admin')) {
-        role = 'admin';
-      } else if (username.toLowerCase().includes('hotel')) {
-        role = 'hotel';
-        entityId = 1;
-      } else if (username.toLowerCase().includes('merchant')) {
-        role = 'merchant';
-        entityId = 1;
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
       }
       
-      const fakeUser = {
-        id: 1,
-        username: username,
-        role: role,
-        entityId: entityId
-      };
-      
-      const token = generateToken(fakeUser);
+      const token = generateToken(user);
       
       // Get associated entity data based on user role
       let entity = null;
-      if (fakeUser.role === 'hotel' && fakeUser.entityId) {
-        entity = await storage.getHotel(fakeUser.entityId);
-      } else if (fakeUser.role === 'merchant' && fakeUser.entityId) {
-        entity = await storage.getMerchant(fakeUser.entityId);
+      if (user.role === 'hotel' && user.entityId) {
+        entity = await storage.getHotel(user.entityId);
+      } else if (user.role === 'merchant' && user.entityId) {
+        entity = await storage.getMerchant(user.entityId);
       }
       
-      console.log(`[TEST MODE] Login successful for user: ${username} with role: ${fakeUser.role}`);
-      res.json({ user: fakeUser, token, entity });
+      console.log(`[TEST MODE] Login successful for user: ${username} with role: ${user.role}`);
+      res.json({ user, token, entity });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Login failed" });

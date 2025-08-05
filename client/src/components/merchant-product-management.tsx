@@ -100,18 +100,23 @@ export default function MerchantProductManagement({ merchantId }: MerchantProduc
 
   // Mutations
   const createProductMutation = useMutation({
-    mutationFn: (data: ProductFormData) => api.createProduct({
-      ...data,
-      merchantId,
-      price: data.price.toString(),
-    }),
+    mutationFn: (data: ProductFormData) => {
+      console.log("Creating product with data:", data);
+      return api.createProduct({
+        ...data,
+        merchantId,
+        price: data.price.toString(),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/products/merchant/${merchantId}`] });
       toast.success("Produit créé avec succès");
       setIsAddingProduct(false);
+      setFormErrors({});
     },
-    onError: () => {
-      toast.error("Erreur lors de la création du produit");
+    onError: (error: any) => {
+      console.error("Product creation error:", error);
+      toast.error("Erreur lors de la création du produit: " + (error.message || "Erreur inconnue"));
     },
   });
 
@@ -143,10 +148,10 @@ export default function MerchantProductManagement({ merchantId }: MerchantProduc
   const validateProductForm = (formData: ProductFormData) => {
     const errors: Record<string, string> = {};
     if (!formData.name || formData.name.length < 2) errors.name = "Le nom doit contenir au moins 2 caractères";
-    if (!formData.price || isNaN(Number(formData.price)) || Number(formData.price) < 1) errors.price = "Le prix doit être un nombre positif (min 1€)";
+    if (!formData.price || isNaN(Number(formData.price)) || Number(formData.price) < 0.01) errors.price = "Le prix doit être un nombre positif (min 0.01€)";
     if (!formData.category) errors.category = "La catégorie est requise";
-    if (!formData.imageUrl || !/^https?:\/\//.test(formData.imageUrl)) errors.imageUrl = "L'URL de l'image est requise et doit être valide";
-    if (formData.description && formData.description.length > 0 && formData.description.length < 20) errors.description = "La description doit contenir au moins 20 caractères";
+    if (formData.imageUrl && formData.imageUrl.length > 0 && !/^https?:\/\//.test(formData.imageUrl)) errors.imageUrl = "L'URL de l'image doit être valide";
+    if (formData.description && formData.description.length > 0 && formData.description.length < 10) errors.description = "La description doit contenir au moins 10 caractères";
     if (formData.stock !== undefined && (isNaN(Number(formData.stock)) || Number(formData.stock) < 0)) errors.stock = "Le stock doit être un nombre positif";
     return errors;
   };
@@ -168,9 +173,15 @@ export default function MerchantProductManagement({ merchantId }: MerchantProduc
 
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
+      console.log("Form submitted with data:", formData);
       const errors = validateProductForm(formData);
+      console.log("Validation errors:", errors);
       setFormErrors(errors);
-      if (Object.keys(errors).length > 0) return;
+      if (Object.keys(errors).length > 0) {
+        console.log("Form has validation errors, not submitting");
+        return;
+      }
+      console.log("No validation errors, submitting form");
       onSubmit(formData);
     };
 
@@ -257,9 +268,25 @@ export default function MerchantProductManagement({ merchantId }: MerchantProduc
               placeholder="https://..."
             />
             {formErrors.imageUrl && <p className="text-sm text-red-600">{formErrors.imageUrl}</p>}
-            <Button type="button" variant="outline" size="sm">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                // Pour l'instant, on utilise une URL d'exemple
+                const exampleUrls = [
+                  "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
+                  "https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
+                  "https://images.unsplash.com/photo-1544551763-46a013bb70d5?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400",
+                  "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=400"
+                ];
+                const randomUrl = exampleUrls[Math.floor(Math.random() * exampleUrls.length)];
+                setFormData({ ...formData, imageUrl: randomUrl });
+                toast.success("Image sélectionnée");
+              }}
+            >
               <Upload size={16} className="mr-1" />
-              Upload
+              Sélectionner
             </Button>
           </div>
         </div>

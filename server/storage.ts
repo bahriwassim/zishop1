@@ -72,6 +72,8 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, user: Partial<User>): Promise<User | undefined>;
+  deleteUser(id: number): Promise<boolean>;
   authenticateUser(username: string, password: string): Promise<User | undefined>;
 
   // Hotel-Merchant associations
@@ -389,21 +391,27 @@ export class MemStorage implements IStorage {
       // BYPASS DATABASE FOR TESTING - Create fake hotel
       console.log(`[TEST MODE] Creating fake hotel: ${insertHotel.name}`);
       
+      // Generate unique hotel code if not provided
+      const hotelCode = insertHotel.code || `ZI${Date.now().toString().slice(-6)}`;
+      
+      // Generate QR code
+      const qrCode = `https://zishop.co/hotel/${hotelCode}`;
+      
       const fakeHotel: Hotel = {
         id: this.currentId++,
         name: insertHotel.name,
         address: insertHotel.address,
-        code: insertHotel.code,
+        code: hotelCode,
         latitude: insertHotel.latitude?.toString() || "0",
         longitude: insertHotel.longitude?.toString() || "0",
-        qr_code: insertHotel.qr_code,
-        is_active: true,
+        qr_code: qrCode,
+        is_active: insertHotel.is_active !== undefined ? insertHotel.is_active : true,
         created_at: new Date(),
         updated_at: new Date()
       };
       
       this.hotels.set(fakeHotel.id, fakeHotel);
-      console.log(`[TEST MODE] Fake hotel created with ID: ${fakeHotel.id}`);
+      console.log(`[TEST MODE] Fake hotel created with ID: ${fakeHotel.id}, Code: ${hotelCode}`);
       return fakeHotel;
     } catch (error) {
       console.error('Error creating hotel:', error);
@@ -456,9 +464,11 @@ export class MemStorage implements IStorage {
         latitude: insertMerchant.latitude?.toString() || "0",
         longitude: insertMerchant.longitude?.toString() || "0",
         rating: insertMerchant.rating?.toString() || "0.0",
-        reviewCount: insertMerchant.reviewCount || 0,
-        isOpen: insertMerchant.isOpen || true,
-        imageUrl: insertMerchant.imageUrl || null
+        review_count: insertMerchant.review_count || 0,
+        is_open: insertMerchant.isOpen !== undefined ? insertMerchant.isOpen : true,
+        image_url: insertMerchant.imageUrl || null,
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
       this.merchants.set(fakeMerchant.id, fakeMerchant);
@@ -687,6 +697,19 @@ export class MemStorage implements IStorage {
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...updates, updated_at: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async deleteUser(id: number): Promise<boolean> {
+    return this.users.delete(id);
   }
 
   async authenticateUser(username: string, password: string): Promise<User | undefined> {

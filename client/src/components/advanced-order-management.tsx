@@ -181,6 +181,16 @@ export default function AdvancedOrderManagement({
             variant: "default" as const,
           });
         }
+        if (order.status === "delivered" && !order.pickedUp) {
+          actions.push({
+            label: "Remis au client",
+            action: () => handleStatusUpdate(order.id, "delivered", { 
+              pickedUp: true, 
+              pickedUpAt: new Date().toISOString() 
+            }),
+            variant: "outline" as const,
+          });
+        }
         break;
 
       case "admin":
@@ -262,20 +272,42 @@ export default function AdvancedOrderManagement({
 
                 {/* Commissions */}
                 <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-700">Répartition</h4>
+                  <h4 className="font-semibold text-gray-700">
+                    {userRole === "hotel" ? "Commission Hôtel" : "Répartition"}
+                  </h4>
                   <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span>Commerçant (75%)</span>
-                      <span className="font-semibold text-green-600">{commissions.merchant}€</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Zishop (20%)</span>
-                      <span className="font-semibold text-blue-600">{commissions.zishop}€</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Hôtel (5%)</span>
-                      <span className="font-semibold text-purple-600">{commissions.hotel}€</span>
-                    </div>
+                    {userRole === "hotel" ? (
+                      <div className="flex justify-between">
+                        <span>Commission Hôtel (5%)</span>
+                        <span className="font-semibold text-purple-600">{commissions.hotel}€</span>
+                      </div>
+                    ) : userRole === "merchant" ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span>Votre commission (75%)</span>
+                          <span className="font-semibold text-green-600">{commissions.merchant}€</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Zishop (20%)</span>
+                          <span className="font-semibold text-blue-600">{commissions.zishop}€</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between">
+                          <span>Commerçant (75%)</span>
+                          <span className="font-semibold text-green-600">{commissions.merchant}€</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Zishop (20%)</span>
+                          <span className="font-semibold text-blue-600">{commissions.zishop}€</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Hôtel (5%)</span>
+                          <span className="font-semibold text-purple-600">{commissions.hotel}€</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

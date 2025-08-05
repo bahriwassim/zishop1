@@ -9,8 +9,7 @@ import OrderCard from "@/components/order-card";
 import AdvancedOrderManagement from "@/components/advanced-order-management";
 import HotelSidebar from "@/components/hotel-sidebar";
 import HotelMerchantSelector from "@/components/hotel-merchant-selector";
-import HotelReception from "@/components/hotel-reception";
-import HotelGuests from "@/components/hotel-guests";
+
 import { QrCode, Download, Gift, MapPin, TrendingUp, Euro, Clock, Truck } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -272,17 +271,9 @@ export default function HotelDashboard() {
           </div>
         );
 
-      case "reception":
-        return <HotelReception hotelId={selectedHotelId} />;
-
       case "merchants":
         return (
           <HotelMerchantSelector hotelId={selectedHotelId} />
-        );
-
-      case "guests":
-        return (
-          <HotelGuests hotelId={selectedHotelId} />
         );
 
       case "analytics":

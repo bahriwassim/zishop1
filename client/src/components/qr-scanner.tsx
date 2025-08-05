@@ -11,15 +11,24 @@ interface QRScannerProps {
 export default function QRScanner({ onScan }: QRScannerProps) {
   const [manualCode, setManualCode] = useState("");
   const [showManualInput, setShowManualInput] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const handleScanSimulation = () => {
+    setIsScanning(true);
     // Simulate QR scan with default hotel code
-    onScan("ZI75015");
+    setTimeout(() => {
+      onScan("ZI75015");
+      setIsScanning(false);
+    }, 1000);
   };
 
   const handleManualSubmit = () => {
     if (manualCode.trim()) {
-      onScan(manualCode.trim());
+      setIsScanning(true);
+      setTimeout(() => {
+        onScan(manualCode.trim());
+        setIsScanning(false);
+      }, 500);
     }
   };
 
@@ -36,10 +45,20 @@ export default function QRScanner({ onScan }: QRScannerProps) {
             <p className="text-sm text-gray-600 mb-3">Scanner le QR code de votre hôtel</p>
             <Button
               onClick={handleScanSimulation}
+              disabled={isScanning}
               className="mb-2 bg-primary text-white hover:bg-primary/90"
             >
-              <Camera className="mr-2" size={16} />
-              Simuler scan QR
+              {isScanning ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Scan en cours...
+                </>
+              ) : (
+                <>
+                  <Camera className="mr-2" size={16} />
+                  Simuler scan QR
+                </>
+              )}
             </Button>
             <br />
             <Button
@@ -62,12 +81,17 @@ export default function QRScanner({ onScan }: QRScannerProps) {
                   onKeyPress={(e) => e.key === "Enter" && handleManualSubmit()}
                 />
                 <div className="flex space-x-2">
-                  <Button onClick={handleManualSubmit} className="flex-1">
-                    Valider
+                  <Button 
+                    onClick={handleManualSubmit} 
+                    disabled={isScanning || !manualCode.trim()}
+                    className="flex-1"
+                  >
+                    {isScanning ? 'Validation...' : 'Valider'}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setShowManualInput(false)}
+                    disabled={isScanning}
                     className="flex-1"
                   >
                     Retour

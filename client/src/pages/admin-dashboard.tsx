@@ -14,6 +14,9 @@ import { HotelValidation } from '@/components/admin/hotel-validation';
 import { SimpleUserForm } from '@/components/admin/simple-user-form';
 import { HotelAddForm } from '@/components/admin/hotel-add-form';
 import { MerchantAddForm } from '@/components/admin/merchant-add-form';
+import { HotelMerchantAssociation } from '@/components/admin/hotel-merchant-association';
+import { HotelEditForm } from '@/components/admin/hotel-edit-form';
+import { MerchantEditForm } from '@/components/admin/merchant-edit-form';
 import AdminOrderAnalytics from '@/components/admin/admin-order-analytics';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validationService } from '@/services/validation.service';
@@ -30,6 +33,8 @@ export default function AdminDashboard() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [showHotelForm, setShowHotelForm] = useState(false);
   const [showMerchantForm, setShowMerchantForm] = useState(false);
+  const [editingHotel, setEditingHotel] = useState<Hotel | null>(null);
+  const [editingMerchant, setEditingMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState({
     products: false,
     merchants: false,
@@ -401,8 +406,14 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                             <div className="flex space-x-2">
-                              <Badge className="bg-accent text-white">Actif</Badge>
-                              <Button size="sm" variant="outline">
+                              <Badge className={hotel.is_active ? "bg-accent text-white" : "bg-gray-500 text-white"}>
+                                {hotel.is_active ? "Actif" : "Inactif"}
+                              </Badge>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => setEditingHotel(hotel)}
+                              >
                                 <Edit size={14} />
                               </Button>
                             </div>
@@ -474,7 +485,11 @@ export default function AdminDashboard() {
                                 <span className="text-xs text-gray-500">
                                   Note: {merchant.rating}/5 ({merchant.review_count} avis)
                                 </span>
-                                <Button size="sm" variant="outline">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => setEditingMerchant(merchant)}
+                                >
                                   <Edit size={14} />
                                 </Button>
                               </div>
@@ -799,6 +814,13 @@ export default function AdminDashboard() {
       case "tests":
         return <TestRealScenarios />;
 
+      case "hotel-merchants":
+        return (
+          <div className="space-y-6">
+            <HotelMerchantAssociation hotels={hotelsData} merchants={merchantsData} />
+          </div>
+        );
+
       case "analytics":
         return <AnalyticsDashboard hotels={hotelsData} merchants={merchantsData} orders={orders} stats={stats} />;
 
@@ -903,6 +925,19 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* Modals d'édition */}
+        <HotelEditForm
+          hotel={editingHotel}
+          isOpen={!!editingHotel}
+          onClose={() => setEditingHotel(null)}
+        />
+        
+        <MerchantEditForm
+          merchant={editingMerchant}
+          isOpen={!!editingMerchant}
+          onClose={() => setEditingMerchant(null)}
+        />
       </div>
     </div>
   );

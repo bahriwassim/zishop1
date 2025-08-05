@@ -125,23 +125,60 @@ export const insertMerchantSchema = createInsertSchema(merchants).omit({
   longitude: data.longitude?.toString() || "0"
 }));
 
-export const insertProductSchema = createInsertSchema(products).omit({
-  id: true,
-});
+export const insertProductSchema = z.object({
+  merchantId: z.number(),
+  name: z.string().min(1, "Le nom est requis"),
+  description: z.string().optional().default(""),
+  price: z.string().min(1, "Le prix est requis"),
+  imageUrl: z.string().optional().default(""),
+  isAvailable: z.boolean().optional().default(true),
+  category: z.string().min(1, "La catégorie est requise"),
+  isSouvenir: z.boolean().optional().default(false),
+  origin: z.string().optional().default(""),
+  material: z.string().optional().default(""),
+  stock: z.number().optional().default(0),
+}).transform((data) => ({
+  merchant_id: data.merchantId,
+  name: data.name,
+  description: data.description || "",
+  price: data.price,
+  image_url: data.imageUrl || "",
+  is_available: data.isAvailable,
+  category: data.category,
+  is_souvenir: data.isSouvenir,
+  origin: data.origin || "",
+  material: data.material || "",
+  stock: data.stock || 0,
+  validation_status: "pending",
+  rejection_reason: null,
+  validated_at: null,
+  validated_by: null,
+}));
 
 export const insertClientSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  first_name: z.string().min(2),
-  last_name: z.string().min(2),
+  firstName: z.string().min(2),
+  lastName: z.string().min(2),
   phone: z.string(),
 });
 
-export const insertOrderSchema = createInsertSchema(orders).omit({
-  id: true,
-  order_number: true,
-  created_at: true,
-  updated_at: true,
+export const insertOrderSchema = z.object({
+  hotelId: z.number(),
+  merchantId: z.number(),
+  clientId: z.number().optional(),
+  customerName: z.string().min(1, "Le nom du client est requis"),
+  customerRoom: z.string().min(1, "Le numéro de chambre est requis"),
+  items: z.array(z.object({
+    productId: z.number(),
+    quantity: z.number().min(1),
+    name: z.string(),
+    price: z.string()
+  })),
+  totalAmount: z.string().min(1, "Le montant total est requis"),
+  status: z.string().optional().default("pending"),
+  deliveryNotes: z.string().optional(),
+  estimatedDelivery: z.string().optional(),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

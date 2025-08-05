@@ -28,14 +28,14 @@ export default defineConfig({
     global: "globalThis",
   },
   server: {
-    port: 5000,
+    port: 3001,
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: "http://localhost:5000",
         changeOrigin: true,
       },
       "/socket.io": {
-        target: "http://localhost:3000",
+        target: "http://localhost:5000",
         changeOrigin: true,
         ws: true,
       },

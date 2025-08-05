@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react'
-import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Upload, X, Image as ImageIcon, AlertCircle } from 'lucide-react'
 import { uploadImage, validateImageFile, resizeImage } from '../../../shared/storage-utils'
-import { STORAGE_BUCKETS, StorageBucket } from '../../../shared/supabase'
+import { StorageBucket } from '../../../shared/supabase'
 
 interface ImageUploadProps {
   bucket: StorageBucket
@@ -29,14 +29,15 @@ export function ImageUpload({
   const [isUploading, setIsUploading] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    setError(null)
-    
+    console.log('Fichier sélectionné:', file.name, file.size, file.type)
+
     // Validation du fichier
     const validation = validateImageFile(file)
     if (!validation.valid) {
@@ -45,40 +46,56 @@ export function ImageUpload({
     }
 
     setIsUploading(true)
+    setError(null)
+    setDebugInfo('Début de l\'upload...')
 
     try {
       // Prévisualisation
       const previewUrl = URL.createObjectURL(file)
       setPreview(previewUrl)
+      setDebugInfo('Prévisualisation créée')
 
       // Redimensionner l'image si nécessaire
       let fileToUpload = file
       if (file.size > 1024 * 1024) { // Si > 1MB, redimensionner
         try {
+          setDebugInfo('Redimensionnement en cours...')
           fileToUpload = await resizeImage(file, maxWidth, maxHeight, 0.8)
+          setDebugInfo('Image redimensionnée')
         } catch (resizeError) {
           console.warn('Erreur redimensionnement, upload du fichier original:', resizeError)
+          setDebugInfo('Redimensionnement échoué, utilisation du fichier original')
         }
       }
 
       // Upload vers Supabase
+      setDebugInfo('Upload vers Supabase...')
       const result = await uploadImage({
         file: fileToUpload,
         bucket,
         path: `${bucket}/${Date.now()}-${file.name}`
       })
 
+      console.log('Résultat upload:', result)
+
       if (result.success && result.url && result.path) {
         onImageUploaded(result.url, result.path)
         setPreview(result.url)
+        setError(null)
+        setDebugInfo('Upload réussi!')
       } else {
-        setError(result.error || 'Erreur lors de l\'upload')
+        const errorMsg = result.error || 'Erreur lors de l\'upload'
+        setError(errorMsg)
         setPreview(null)
+        setDebugInfo(`Échec: ${errorMsg}`)
+        console.error('Erreur upload:', result)
       }
     } catch (uploadError) {
       console.error('Erreur upload:', uploadError)
-      setError('Erreur lors de l\'upload de l\'image')
+      const errorMsg = uploadError instanceof Error ? uploadError.message : 'Erreur lors de l\'upload de l\'image'
+      setError(errorMsg)
       setPreview(null)
+      setDebugInfo(`Exception: ${errorMsg}`)
     } finally {
       setIsUploading(false)
       // Reset du file input
@@ -91,6 +108,7 @@ export function ImageUpload({
   const handleRemoveImage = () => {
     setPreview(null)
     setError(null)
+    setDebugInfo(null)
     if (onImageRemoved) {
       onImageRemoved()
     }
@@ -106,68 +124,85 @@ export function ImageUpload({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {/* Zone de drop/click */}
-      <div 
-        className={`
-          relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-          ${isUploading ? 'border-blue-300 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
-          ${error ? 'border-red-300 bg-red-50' : ''}
-        `}
-        onClick={() => !isUploading && fileInputRef.current?.click()}
-      >
+      {/* Zone d'upload */}
+      <div className="relative">
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+          accept="image/*"
           onChange={handleFileSelect}
-          className="hidden"
           disabled={isUploading}
+          className="hidden"
+          id={`image-upload-${bucket}`}
         />
-
-        {isUploading ? (
-          <div className="flex flex-col items-center space-y-2">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-            <p className="text-sm text-blue-600">Upload en cours...</p>
+        <label
+          htmlFor={`image-upload-${bucket}`}
+          className={`block w-full p-6 border-2 border-dashed rounded-lg cursor-pointer transition-colors ${
+            isUploading 
+              ? 'border-blue-300 bg-blue-50' 
+              : error 
+                ? 'border-red-300 bg-red-50' 
+                : 'border-gray-300 hover:border-gray-400'
+          }`}
+        >
+          <div className="text-center">
+            {isUploading ? (
+              <div className="flex items-center justify-center space-x-2">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="text-blue-600">Upload en cours...</span>
+              </div>
+            ) : (
+              <>
+                <ImageIcon className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-sm text-gray-600">{placeholder}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Formats acceptés: JPEG, PNG, WebP, GIF (max 5MB)
+                </p>
+              </>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col items-center space-y-2">
-            <Upload className="w-8 h-8 text-gray-400" />
-            <p className="text-sm text-gray-600">{placeholder}</p>
-            <p className="text-xs text-gray-500">
-              JPEG, PNG, WebP, GIF - Max 5MB
-            </p>
-          </div>
-        )}
+        </label>
       </div>
 
-      {/* Prévisualisation de l'image */}
+      {/* Affichage des erreurs */}
+      {error && (
+        <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-red-500" />
+          <span className="text-sm text-red-700">{error}</span>
+        </div>
+      )}
+
+      {/* Informations de debug */}
+      {debugInfo && (
+        <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+          Debug: {debugInfo}
+        </div>
+      )}
+
+      {/* Prévisualisation */}
       {showPreview && displayImage && (
         <div className="relative">
           <img
             src={displayImage}
             alt={`Image ${bucketLabels[bucket]}`}
-            className="w-full h-48 object-cover rounded-lg border border-gray-200"
+            className="w-full h-48 object-cover rounded-lg border"
           />
           <button
+            type="button"
             onClick={handleRemoveImage}
             className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
-            type="button"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Messages d'erreur */}
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-600">{error}</p>
-        </div>
-      )}
-
-      {/* Informations sur le bucket */}
+      {/* Informations de debug */}
       <div className="text-xs text-gray-500">
-        📁 Upload vers : <code>{bucket}</code>
+        <p>Bucket: <code className="bg-gray-100 px-1 rounded">{bucket}</code></p>
+        {displayImage && (
+          <p>URL: <code className="bg-gray-100 px-1 rounded break-all">{displayImage}</code></p>
+        )}
       </div>
     </div>
   )
@@ -184,6 +219,7 @@ export function SimpleImageUpload({
   className?: string
 }) {
   const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,11 +228,12 @@ export function SimpleImageUpload({
 
     const validation = validateImageFile(file)
     if (!validation.valid) {
-      alert(validation.error)
+      setError(validation.error || 'Fichier invalide')
       return
     }
 
     setIsUploading(true)
+    setError(null)
 
     try {
       const result = await uploadImage({
@@ -207,12 +244,13 @@ export function SimpleImageUpload({
 
       if (result.success && result.url) {
         onImageUploaded(result.url)
+        setError(null)
       } else {
-        alert(result.error || 'Erreur lors de l\'upload')
+        setError(result.error || 'Erreur lors de l\'upload')
       }
     } catch (error) {
       console.error('Erreur upload:', error)
-      alert('Erreur lors de l\'upload de l\'image')
+      setError('Erreur lors de l\'upload de l\'image')
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) {
@@ -233,6 +271,9 @@ export function SimpleImageUpload({
       />
       {isUploading && (
         <p className="text-sm text-blue-600 mt-1">Upload en cours...</p>
+      )}
+      {error && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
       )}
     </div>
   )

@@ -25,7 +25,29 @@ export async function authenticateUser(username: string, password: string): Prom
     // BYPASS AUTHENTICATION FOR TESTING - Accept any username/password
     console.log(`[TEST MODE] Bypassing authentication for user: ${username}`);
     
-    // Determine role based on username
+    // Try to find the user in storage first
+    const users = await storage.getAllUsers();
+    console.log(`[TEST MODE] Searching for user: "${username}" in ${users.length} users`);
+    
+    users.forEach((user, index) => {
+      console.log(`[TEST MODE] User ${index + 1}: "${user.username}" (ID: ${user.id}, Role: ${user.role})`);
+    });
+    
+    const existingUser = users.find(user => user.username === username);
+    
+    if (existingUser) {
+      console.log(`[TEST MODE] Found existing user: ${username} with role: ${existingUser.role} (ID: ${existingUser.id})`);
+      return {
+        id: existingUser.id,
+        username: existingUser.username,
+        role: existingUser.role as 'admin' | 'hotel' | 'merchant' | 'client',
+        entityId: existingUser.entity_id || undefined
+      };
+    } else {
+      console.log(`[TEST MODE] User "${username}" NOT FOUND in storage`);
+    }
+    
+    // Fallback: Determine role based on username
     let role: 'admin' | 'hotel' | 'merchant' | 'client' = 'client';
     let entityId: number | undefined = undefined;
     
@@ -40,6 +62,8 @@ export async function authenticateUser(username: string, password: string): Prom
     } else {
       role = 'client';
     }
+    
+    console.log(`[TEST MODE] Using fallback role: ${role} for user: ${username}`);
     
     return {
       id: 1, // Default ID

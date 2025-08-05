@@ -49,11 +49,14 @@ export function ProductValidation() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch('http://localhost:5000/api/products');
       if (response.ok) {
         const data = await response.json();
+        console.log('Produits chargés:', data);
         setProducts(data);
         setFilteredProducts(data);
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Erreur chargement produits:', error);
@@ -65,9 +68,15 @@ export function ProductValidation() {
 
   const validateProduct = async (productId: number, action: 'approve' | 'reject') => {
     try {
-      const response = await fetch(`/api/products/${productId}/validate`, {
+      console.log(`Validation produit ${productId}: ${action}`, { note: validationNote });
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/products/${productId}/validate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
         body: JSON.stringify({
           action,
           note: validationNote
@@ -75,14 +84,18 @@ export function ProductValidation() {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log('Validation réussie:', result);
         toast.success(`Produit ${action === 'approve' ? 'approuvé' : 'rejeté'} avec succès`);
         setValidationNote('');
         setSelectedProduct(null);
         loadProducts();
       } else {
-        throw new Error('Erreur lors de la validation');
+        const errorData = await response.json().catch(() => ({ message: 'Erreur inconnue' }));
+        throw new Error(errorData.message || `HTTP ${response.status}`);
       }
     } catch (error: any) {
+      console.error('Erreur validation:', error);
       toast.error(`Erreur: ${error.message}`);
     }
   };
@@ -293,7 +306,7 @@ export function ProductValidation() {
                             size="sm"
                             className="text-green-600 hover:text-green-700"
                             onClick={() => {
-                              setSelectedProduct(product);
+                              console.log('🟢 Approbation rapide produit:', product.id);
                               validateProduct(product.id, 'approve');
                             }}
                           >
@@ -304,7 +317,11 @@ export function ProductValidation() {
                             variant="outline"
                             size="sm"
                             className="text-red-600 hover:text-red-700"
-                            onClick={() => setSelectedProduct(product)}
+                            onClick={() => {
+                              console.log('🔴 Rejet rapide produit:', product.id);
+                              setSelectedProduct(product);
+                              // Le rejet nécessite une note, donc on ouvre le modal
+                            }}
                           >
                             <XCircle size={14} className="mr-1" />
                             Rejeter
