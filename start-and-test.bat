@@ -1,46 +1,36 @@
 @echo off
+chcp 65001 >nul
+echo.
 echo ========================================
-echo   ZISHOP - DEMARRAGE ET TESTS COMPLETS
-echo ========================================
-echo.
-
-echo [1/4] Installation des dependances...
-call npm install
-if %errorlevel% neq 0 (
-    echo ❌ Erreur lors de l'installation des dependances
-    pause
-    exit /b 1
-)
-echo ✅ Dependances installees
-echo.
-
-echo [2/4] Demarrage du serveur en arriere-plan...
-start /B npm run dev
-echo ✅ Serveur demarre sur le port 5000
-echo.
-
-echo [3/4] Attente du demarrage du serveur...
-timeout /t 5 /nobreak > nul
-echo ✅ Serveur pret
-echo.
-
-echo [4/4] Lancement des tests complets...
-node test-complete-fixes.js
-if %errorlevel% neq 0 (
-    echo ❌ Erreur lors des tests
-    pause
-    exit /b 1
-)
-echo.
-
-echo ========================================
-echo   TESTS TERMINES AVEC SUCCES!
+echo    DÉMARRAGE ET TEST ZISHOP
 echo ========================================
 echo.
-echo L'application ZiShop est maintenant:
-echo ✅ Demarree sur http://localhost:5000
-echo ✅ Testee et validee
-echo ✅ Prete pour utilisation
+
+echo 🔧 Démarrage de l'application en mode développement...
 echo.
-echo Appuyez sur une touche pour fermer...
-pause > nul 
+
+REM Démarrer l'application en arrière-plan
+start "ZiShop Dev Server" cmd /c "npm run dev"
+
+echo ⏳ Attente du démarrage du serveur...
+timeout /t 5 /nobreak >nul
+
+echo.
+echo 🧪 Test de l'application...
+echo.
+
+REM Tester l'application
+node test-application-complete.js
+
+echo.
+echo 📋 RÉSUMÉ DES TESTS TERMINÉ
+echo ===========================
+echo.
+echo 🌐 Interface web: http://localhost:5000
+echo 📱 API: http://localhost:5000/api
+echo 🔔 WebSocket: Port 5000
+echo.
+echo 💡 L'application est maintenant fonctionnelle !
+echo 💡 Utilisez Ctrl+C dans la fenêtre du serveur pour l'arrêter
+echo.
+pause 

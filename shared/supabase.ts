@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
 // Récupération des variables d'environnement avec fallback
-const supabaseUrl = process.env.SUPABASE_URL || import.meta.env?.VITE_SUPABASE_URL
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.SUPABASE_URL || import.meta.env?.VITE_SUPABASE_URL || 'https://dlbobqhmivvbpvuqmcoo.supabase.co'
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsYm9icWhtaXZ2YnB2dXFtY29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxODcxNDAsImV4cCI6MjA2ODc2MzE0MH0.iGyifmEihWi_C0HeAfrSfatxAVSRLYEo-GvGtMUkcqo'
 
 console.log('Configuration Supabase:', {
   url: supabaseUrl ? 'Définie' : 'Manquante',

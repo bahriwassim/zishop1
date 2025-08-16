@@ -255,11 +255,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Mettre à jour le statut de validation du produit
       const validationStatus = action === 'approve' ? 'approved' : 'rejected';
-      const updates = {
+      const updates: any = {
+        // snake_case pour une éventuelle implémentation SQL
         validation_status: validationStatus,
         rejection_reason: action === 'reject' ? note : null,
         validated_at: new Date(),
-        validated_by: req.user!.id
+        validated_by: req.user!.id,
+        // camelCase pour le storage mémoire
+        validationStatus,
+        rejectionReason: action === 'reject' ? note : null,
+        validatedAt: new Date().toISOString(),
+        validatedBy: req.user!.id,
       };
       
       const updatedProduct = await storage.updateProduct(id, updates);
@@ -357,27 +363,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const orderData = insertOrderSchema.parse(req.body);
       
-      // Transformer les données pour le storage
-      const transformedOrderData = {
-        hotel_id: orderData.hotelId,
-        merchant_id: orderData.merchantId,
-        client_id: orderData.clientId || null,
-        customer_name: orderData.customerName,
-        customer_room: orderData.customerRoom,
-        items: orderData.items,
-        total_amount: orderData.totalAmount,
-        status: orderData.status || "pending",
-        delivery_notes: orderData.deliveryNotes || "",
-        estimated_delivery: orderData.estimatedDelivery ? new Date(orderData.estimatedDelivery) : null,
-        merchant_commission: null,
-        zishop_commission: null,
-        hotel_commission: null,
-        confirmed_at: null,
-        delivered_at: null,
-        picked_up: false,
-        picked_up_at: null,
-      };
-      
       // Vérification du stock pour chaque produit commandé
       if (!Array.isArray(orderData.items)) {
         return res.status(400).json({ message: "Le champ 'items' doit être un tableau." });
@@ -406,27 +391,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const quantity = (item as any).quantity;
           const product = await storage.getProduct(productId);
           if (product) {
-            const currentStock = typeof product.stock === "number" ? product.stock : 0;
-            await storage.updateProduct(product.id, { stock: currentStock - quantity });
+            const currentStock = typeof (product as any).stock === "number" ? (product as any).stock : 0;
+            await storage.updateProduct((product as any).id, { stock: currentStock - quantity });
           }
         }
       }
-      // Calculer automatiquement les commissions selon le cahier des charges
-      const totalAmount = parseFloat(orderData.totalAmount);
-      const merchantCommission = (totalAmount * 0.75).toFixed(2); // 75%
-      const zishopCommission = (totalAmount * 0.20).toFixed(2);   // 20% 
-      const hotelCommission = (totalAmount * 0.05).toFixed(2);    // 5%
-      // Générer un numéro de commande unique
-      const orderNumber = `ZS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      const enhancedOrderData = {
-        ...transformedOrderData,
-        order_number: orderNumber,
-        merchant_commission: merchantCommission,
-        zishop_commission: zishopCommission,
-        hotel_commission: hotelCommission,
-        status: "pending", // Statut initial selon le workflow
-      };
-      const order = await storage.createOrder(enhancedOrderData);
+      // Laisser le storage gérer la génération du numéro de commande
+      // et le calcul des commissions, en restant en camelCase pour cohérence.
+      const order = await storage.createOrder({
+        hotelId: orderData.hotelId,
+        merchantId: orderData.merchantId,
+        clientId: orderData.clientId,
+        customerName: orderData.customerName,
+        customerRoom: orderData.customerRoom,
+        items: orderData.items,
+        totalAmount: orderData.totalAmount,
+        status: orderData.status || "pending",
+        deliveryNotes: orderData.deliveryNotes,
+        estimatedDelivery: orderData.estimatedDelivery,
+      } as any);
       
       // Send notification about new order
       notificationService.notifyNewOrder(order);
@@ -442,10 +425,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/orders/:id", requireAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const updates = req.body;
+      const updatesInput = req.body || {};
+      // Normaliser les champs snake_case -> camelCase pour compatibilité MemStorage
+      const normalizedUpdates: any = { ...updatesInput };
+      const map: Record<string, string> = {
+        order_number: 'orderNumber',
+        hotel_id: 'hotelId',
+        merchant_id: 'merchantId',
+        client_id: 'clientId',
+        customer_name: 'customerName',
+        customer_room: 'customerRoom',
+        total_amount: 'totalAmount',
+        merchant_commission: 'merchantCommission',
+        zishop_commission: 'zishopCommission',
+        hotel_commission: 'hotelCommission',
+        delivery_notes: 'deliveryNotes',
+        confirmed_at: 'confirmedAt',
+        delivered_at: 'deliveredAt',
+        estimated_delivery: 'estimatedDelivery',
+        picked_up: 'pickedUp',
+        picked_up_at: 'pickedUpAt',
+      };
+      for (const [k, v] of Object.entries(map)) {
+        if (k in normalizedUpdates && !(v in normalizedUpdates)) {
+          normalizedUpdates[v] = (normalizedUpdates as any)[k];
+        }
+      }
+      const updates = normalizedUpdates;
       
       // Validation des transitions de statut selon le workflow
-      if (updates.status) {
+      if (typeof updates.status === 'string' && updates.status.length > 0) {
         const currentOrder = await storage.getOrder(id);
         if (!currentOrder) {
           return res.status(404).json({ message: "Order not found" });
@@ -455,14 +464,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "pending": ["confirmed", "cancelled"],
           "confirmed": ["preparing", "cancelled"],
           "preparing": ["ready", "cancelled"],
-          "ready": ["delivering", "cancelled"],
+          // autoriser raccourci : ready -> delivered
+          "ready": ["delivering", "delivered", "cancelled"],
           "delivering": ["delivered", "cancelled"],
           "delivered": [], // État final
           "cancelled": [], // État final
         };
         
         const allowedNextStates = validTransitions[currentOrder.status] || [];
+        // Autoriser mise à jour des méta-infos même si statut inchangé
         if (!allowedNextStates.includes(updates.status)) {
+          if (currentOrder.status === updates.status) {
+            const idempotentOrder = await storage.updateOrder(id, updates);
+            return res.json(idempotentOrder);
+          }
           return res.status(400).json({ 
             message: `Transition de statut invalide: ${currentOrder.status} → ${updates.status}` 
           });
@@ -476,6 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updates.deliveredAt = new Date().toISOString();
         }
       }
+      // Si pas de changement de statut (ou pas fourni), on autorise les mises à jour de métadonnées (pickedUp,...)
       
       const order = await storage.updateOrder(id, updates);
       if (!order) {
@@ -492,17 +508,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           "delivered": "Votre commande a été livrée à la réception",
           "cancelled": "Votre commande a été annulée"
         };
-        
-                 notificationService.notifyOrderUpdate({
-           type: 'order_update',
-           orderId: order.id,
-           orderNumber: order.order_number,
-           status: updates.status,
-           hotelId: order.hotel_id,
-           merchantId: order.merchant_id,
-           clientId: order.client_id || undefined,
-           message: statusMessages[updates.status] || `Statut de commande mis à jour: ${updates.status}`
-         });
+
+        notificationService.notifyOrderUpdate({
+          type: 'order_update',
+          orderId: (order as any).id,
+          orderNumber: (order as any).orderNumber || (order as any).order_number,
+          status: updates.status,
+          hotelId: (order as any).hotelId || (order as any).hotel_id,
+          merchantId: (order as any).merchantId || (order as any).merchant_id,
+          clientId: (order as any).clientId || (order as any).client_id || undefined,
+          message: statusMessages[updates.status] || `Statut de commande mis à jour: ${updates.status}`
+        });
       }
       
       res.json(order);
@@ -592,17 +608,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       switch (period) {
         case "today":
           filteredOrders = orders.filter(order => {
-            const orderDate = new Date(order.created_at);
+            const orderDate = new Date((order as any).createdAt || (order as any).created_at);
             return orderDate.toDateString() === now.toDateString();
           });
           break;
         case "week":
           const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          filteredOrders = orders.filter(order => new Date(order.created_at) >= weekAgo);
+          filteredOrders = orders.filter(order => new Date((order as any).createdAt || (order as any).created_at) >= weekAgo);
           break;
         case "month":
           const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-          filteredOrders = orders.filter(order => new Date(order.created_at) >= monthAgo);
+          filteredOrders = orders.filter(order => new Date((order as any).createdAt || (order as any).created_at) >= monthAgo);
           break;
       }
       
@@ -615,9 +631,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const stats = filteredOrders
-        .filter(order => !["cancelled"].includes(order.status))
+        .filter(order => !["cancelled"].includes((order as any).status))
         .reduce((acc: StatsAccumulator, order) => {
-          const total = parseFloat(order.total_amount);
+          const total = parseFloat((order as any).totalAmount || (order as any).total_amount);
           acc.totalRevenue += total;
           acc.merchantCommission += total * 0.75;
           acc.zishopCommission += total * 0.20;
@@ -740,13 +756,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Créer l'utilisateur dans la base de données
+      // Créer l'utilisateur dans la base de données (camelCase pour compat stockage mémoire)
       const newUser = await storage.createUser({
         username: userData.username,
         password: userData.password,
         role: userData.role,
-        entity_id: userData.entityId || null
-      });
+        entityId: userData.entityId ?? userData.entity_id ?? null
+      } as any);
       
       // Ne pas retourner le mot de passe et formater les dates
       const { password, ...userResponse } = newUser;
@@ -754,9 +770,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Formater les dates pour l'affichage et corriger entityId
       const formattedResponse = {
         ...userResponse,
-        created_at: userResponse.created_at ? new Date(userResponse.created_at).toISOString() : null,
-        updated_at: userResponse.updated_at ? new Date(userResponse.updated_at).toISOString() : null,
-        entityId: userResponse.entity_id // Ajouter entityId pour la compatibilité
+        created_at: (userResponse as any).created_at ? new Date((userResponse as any).created_at).toISOString() : ((userResponse as any).createdAt ? new Date((userResponse as any).createdAt).toISOString() : null),
+        updated_at: (userResponse as any).updated_at ? new Date((userResponse as any).updated_at).toISOString() : ((userResponse as any).updatedAt ? new Date((userResponse as any).updatedAt).toISOString() : null),
+        entityId: (userResponse as any).entity_id ?? (userResponse as any).entityId
       };
       
       console.log("Utilisateur créé:", formattedResponse);
@@ -805,8 +821,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: any = {
         username: userData.username,
         role: userData.role,
-        entity_id: userData.entityId || null,
-        updated_at: new Date()
+        entityId: userData.entityId ?? userData.entity_id ?? null,
+        entity_id: userData.entityId ?? userData.entity_id ?? null,
+        updatedAt: new Date()
       };
       
       // Ajouter le mot de passe seulement s'il est fourni
@@ -826,9 +843,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Formater les dates pour l'affichage et corriger entityId
       const formattedResponse = {
         ...userResponse,
-        created_at: userResponse.created_at ? new Date(userResponse.created_at).toISOString() : null,
-        updated_at: userResponse.updated_at ? new Date(userResponse.updated_at).toISOString() : null,
-        entityId: userResponse.entity_id // Ajouter entityId pour la compatibilité
+        created_at: (userResponse as any).created_at ? new Date((userResponse as any).created_at).toISOString() : ((userResponse as any).createdAt ? new Date((userResponse as any).createdAt).toISOString() : null),
+        updated_at: (userResponse as any).updated_at ? new Date((userResponse as any).updated_at).toISOString() : ((userResponse as any).updatedAt ? new Date((userResponse as any).updatedAt).toISOString() : null),
+        entityId: (userResponse as any).entity_id ?? (userResponse as any).entityId
       };
       
       console.log("Utilisateur modifié:", formattedResponse);
@@ -862,8 +879,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/clients/register", async (req, res) => {
     try {
       console.log("Client registration request:", req.body);
-      
-      const clientData = insertClientSchema.parse(req.body);
+      // Normaliser les champs avant validation (supporte snake_case)
+      const raw = req.body || {};
+      const normalized = {
+        email: raw.email,
+        password: raw.password,
+        firstName: raw.firstName || raw.first_name,
+        lastName: raw.lastName || raw.last_name,
+        phone: raw.phone,
+      };
+      const clientData = insertClientSchema.parse(normalized);
       console.log("Validated client data:", clientData);
       
       // Vérifier si l'email existe déjà

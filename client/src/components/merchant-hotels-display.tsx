@@ -11,7 +11,9 @@ export default function MerchantHotelsDisplay({ merchantId }: MerchantHotelsDisp
   // Récupérer les hôtels associés au commerçant
   const { data: merchantHotels = [], isLoading } = useQuery({
     queryKey: [`/api/merchants/${merchantId}/hotels`],
+    enabled: !!merchantId,
     queryFn: async () => {
+      if (!merchantId) return [];
       const response = await fetch(`/api/merchants/${merchantId}/hotels`);
       if (!response.ok) throw new Error("Failed to fetch merchant hotels");
       return response.json();

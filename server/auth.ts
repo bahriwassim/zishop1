@@ -22,54 +22,19 @@ declare global {
 
 export async function authenticateUser(username: string, password: string): Promise<AuthUser | null> {
   try {
-    // BYPASS AUTHENTICATION FOR TESTING - Accept any username/password
-    console.log(`[TEST MODE] Bypassing authentication for user: ${username}`);
-    
-    // Try to find the user in storage first
     const users = await storage.getAllUsers();
-    console.log(`[TEST MODE] Searching for user: "${username}" in ${users.length} users`);
-    
-    users.forEach((user, index) => {
-      console.log(`[TEST MODE] User ${index + 1}: "${user.username}" (ID: ${user.id}, Role: ${user.role})`);
-    });
-    
-    const existingUser = users.find(user => user.username === username);
-    
-    if (existingUser) {
-      console.log(`[TEST MODE] Found existing user: ${username} with role: ${existingUser.role} (ID: ${existingUser.id})`);
-      return {
-        id: existingUser.id,
-        username: existingUser.username,
-        role: existingUser.role as 'admin' | 'hotel' | 'merchant' | 'client',
-        entityId: existingUser.entity_id || undefined
-      };
-    } else {
-      console.log(`[TEST MODE] User "${username}" NOT FOUND in storage`);
+    const existingUser: any = users.find((u: any) => u.username === username);
+    if (!existingUser) return null;
+    const isProd = (process.env.NODE_ENV || 'development') === 'production';
+    if (isProd) {
+      const ok = await bcrypt.compare(password, existingUser.password);
+      if (!ok) return null;
     }
-    
-    // Fallback: Determine role based on username
-    let role: 'admin' | 'hotel' | 'merchant' | 'client' = 'client';
-    let entityId: number | undefined = undefined;
-    
-    if (username.startsWith('admin') || username === 'admin') {
-      role = 'admin';
-    } else if (username.startsWith('hotel') || username.includes('hotel')) {
-      role = 'hotel';
-      entityId = 1; // Default hotel ID
-    } else if (username.startsWith('merchant') || username.includes('merchant')) {
-      role = 'merchant';
-      entityId = 1; // Default merchant ID
-    } else {
-      role = 'client';
-    }
-    
-    console.log(`[TEST MODE] Using fallback role: ${role} for user: ${username}`);
-    
     return {
-      id: 1, // Default ID
-      username: username,
-      role: role,
-      entityId: entityId
+      id: existingUser.id,
+      username: existingUser.username,
+      role: (existingUser.role as any) || 'client',
+      entityId: (existingUser.entity_id as any) || (existingUser.entityId as any) || undefined,
     };
   } catch (error) {
     console.error('Authentication error:', error);
@@ -90,66 +55,54 @@ export function verifyToken(token: string): AuthUser | null {
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  // BYPASS AUTHENTICATION FOR TESTING - Create a fake user based on path
-  console.log(`[TEST MODE] Bypassing auth middleware for: ${req.method} ${req.path}`);
-  
-  let role: 'admin' | 'hotel' | 'merchant' | 'client' = 'admin';
-  let entityId: number | undefined = undefined;
-  
-  if (req.path.includes('/hotel')) {
-    role = 'hotel';
-    entityId = 1;
-  } else if (req.path.includes('/merchant')) {
-    role = 'merchant';
-    entityId = 1;
-  } else if (req.path.includes('/admin')) {
-    role = 'admin';
-  } else {
-    role = 'client';
+  const isProd = (process.env.NODE_ENV || 'development') === 'production';
+  if (!isProd) {
+    // Dev bypass
+    let role: 'admin' | 'hotel' | 'merchant' | 'client' = 'admin';
+    let entityId: number | undefined = undefined;
+    if (req.path.includes('/hotel')) { role = 'hotel'; entityId = 1; }
+    else if (req.path.includes('/merchant')) { role = 'merchant'; entityId = 1; }
+    else if (req.path.includes('/admin')) { role = 'admin'; }
+    else { role = 'client'; }
+    req.user = { id: 1, username: `test-${role}`, role, entityId };
+    return next();
   }
-  
-  req.user = {
-    id: 1,
-    username: `test-${role}`,
-    role: role,
-    entityId: entityId
-  };
-  
+  // Production: require Bearer token
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!token) return res.status(401).json({ message: 'Unauthorized' });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ message: 'Invalid token' });
+  req.user = payload;
   next();
 }
 
 export function requireRole(role: 'admin' | 'hotel' | 'merchant' | 'client') {
   return (req: Request, res: Response, next: NextFunction) => {
-    // BYPASS ROLE CHECK FOR TESTING - Always allow access
-    console.log(`[TEST MODE] Bypassing role check for: ${role} on ${req.method} ${req.path}`);
-    
-    // Ensure user exists with correct role
-    if (!req.user) {
-      req.user = {
-        id: 1,
-        username: `test-${role}`,
-        role: role,
-        entityId: role === 'hotel' || role === 'merchant' ? 1 : undefined
-      };
+    const isProd = (process.env.NODE_ENV || 'development') === 'production';
+    if (!isProd) {
+      if (!req.user) {
+        req.user = { id: 1, username: `test-${role}`, role, entityId: role === 'hotel' || role === 'merchant' ? 1 : undefined };
+      }
+      return next();
     }
-    
+    if (!req.user || req.user.role !== role) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     next();
   };
 }
 
 export function requireEntityAccess(req: Request, res: Response, next: NextFunction) {
-  // BYPASS ENTITY ACCESS CHECK FOR TESTING - Always allow access
-  console.log(`[TEST MODE] Bypassing entity access check for: ${req.method} ${req.path}`);
-  
-  // Ensure user exists
-  if (!req.user) {
-    req.user = {
-      id: 1,
-      username: 'test-admin',
-      role: 'admin',
-      entityId: 1
-    };
+  const isProd = (process.env.NODE_ENV || 'development') === 'production';
+  if (!isProd) return next();
+  if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+  // In prod: ensure hotel/merchant endpoints accessed by matching entity
+  if (req.path.includes('/hotel/')) {
+    if (req.user.role !== 'hotel') return res.status(403).json({ message: 'Forbidden' });
   }
-  
+  if (req.path.includes('/merchant/')) {
+    if (req.user.role !== 'merchant') return res.status(403).json({ message: 'Forbidden' });
+  }
   next();
 } 

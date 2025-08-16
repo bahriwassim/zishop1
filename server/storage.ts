@@ -1,27 +1,72 @@
+import 'dotenv/config';
 import { Hotel, InsertHotel, Merchant, InsertMerchant, Product, InsertProduct, Order, InsertOrder, User, InsertUser, Client, InsertClient, HotelMerchant, InsertHotelMerchant } from "@shared/schema";
 import { hotels, merchants, products, orders, clients, users, hotel_merchants } from "@shared/schema";
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq, sql } from 'drizzle-orm';
 import postgres from 'postgres';
+import { supabaseAdmin } from './supabase-admin';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 
-// Configuration Supabase
-const supabaseUrl = "https://dlbobqhmivvbpvuqmcoo.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsYm9icWhtaXZ2YnB2dXFtY29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMxODcxNDAsImV4cCI6MjA2ODc2MzE0MH0.iGyifmEihWi_C0HeAfrSfatxAVSRLYEo-GvGtMUkcqo";
+// Connexion PostgreSQL: exiger DATABASE_URL en production, sinon fallback pour dev
+const isProdEnv = (process.env.NODE_ENV || 'development') === 'production';
 
-// Connexion à Supabase via PostgreSQL direct
-const connectionString = `postgresql://postgres.dlbobqhmivvbpvuqmcoo:${supabaseKey}@db.dlbobqhmivvbpvuqmcoo.supabase.co:5432/postgres`;
-const client = postgres(connectionString, {
-  ssl: 'require',
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 10,
-  connection: {
-    application_name: 'zishop-app'
+// Configuration du client PostgreSQL seulement si une URL valide est fournie
+let client: any = null;
+let db: any = null;
+
+if (process.env.DATABASE_URL) {
+  try {
+    // Valider que l'URL est une URL PostgreSQL valide
+    const url = new URL(process.env.DATABASE_URL);
+    if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
+      throw new Error('URL de base de données invalide: doit commencer par postgres:// ou postgresql://');
+    }
+    
+    console.log('🗄️ Configuration PostgreSQL détectée:', {
+      host: url.hostname,
+      port: url.port,
+      database: url.pathname.slice(1),
+      ssl: 'activé'
+    });
+
+    client = postgres(process.env.DATABASE_URL, {
+      ssl: 'require',
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      connection: {
+        application_name: 'zishop-app'
+      },
+      onnotice: (notice: any) => {
+        // Ignorer les notices PostgreSQL non critiques
+        if (notice.code && notice.code.startsWith('42')) {
+          console.log('📝 Notice PostgreSQL:', notice.message);
+        }
+      }
+    });
+
+    // Test de connexion
+    await client`SELECT 1 as test`;
+    console.log('✅ Connexion PostgreSQL établie avec succès');
+    
+    db = drizzle(client);
+  } catch (error: any) {
+    console.error('❌ Erreur de connexion PostgreSQL:', error.message);
+    if (isProdEnv) {
+      throw new Error(`Impossible de se connecter à PostgreSQL: ${error.message}`);
+    }
+    console.log('🔧 Fallback vers le stockage en mémoire pour le développement');
   }
-});
+} else {
+  if (isProdEnv) {
+    throw new Error('DATABASE_URL manquante en production. Configurez votre connexion PostgreSQL/Supabase.');
+  }
+  console.log('🔧 Mode développement: utilisation du stockage en mémoire');
+}
 
-export const db = drizzle(client);
+export { db };
 
 export interface IStorage {
   // Hotels
@@ -93,9 +138,89 @@ export class MemStorage implements IStorage {
   private clients: Map<number, Client> = new Map();
   private hotel_merchants: Map<number, HotelMerchant> = new Map();
   private currentId = 1;
+  private dataFilePath: string;
 
   constructor() {
-    this.seedData();
+    const dataDir = path.resolve(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    this.dataFilePath = path.resolve(dataDir, 'storage.json');
+    // Load from disk if exists, otherwise seed and persist
+    if (fs.existsSync(this.dataFilePath)) {
+      try {
+        const raw = fs.readFileSync(this.dataFilePath, 'utf-8');
+        const data = JSON.parse(raw);
+        this.loadFromObject(data);
+      } catch (e) {
+        console.warn('Failed to load storage.json, seeding fresh data:', e);
+        this.seedData();
+        this.persist();
+      }
+    } else {
+      this.seedData();
+      this.persist();
+    }
+  }
+
+  private loadFromObject(obj: any): void {
+    try {
+      const {
+        hotels = [],
+        merchants = [],
+        products = [],
+        orders = [],
+        users = [],
+        clients = [],
+        hotel_merchants = [],
+        currentId = 1,
+      } = obj || {};
+
+      this.hotels = new Map((hotels as any[]).map((h: any) => [h.id, h]));
+      this.merchants = new Map((merchants as any[]).map((m: any) => [m.id, m]));
+      this.products = new Map((products as any[]).map((p: any) => [p.id, p]));
+      this.orders = new Map((orders as any[]).map((o: any) => [o.id, o]));
+      this.users = new Map((users as any[]).map((u: any) => [u.id, u]));
+      this.clients = new Map((clients as any[]).map((c: any) => [c.id, c]));
+      this.hotel_merchants = new Map((hotel_merchants as any[]).map((hm: any, idx: number) => [hm.id ?? (idx + 1), hm]));
+      this.currentId = Number.isFinite(currentId) ? currentId : this.computeNextId();
+    } catch (e) {
+      console.error('Error loading storage object:', e);
+      this.seedData();
+    }
+  }
+
+  private computeNextId(): number {
+    const allIds: number[] = [
+      ...Array.from(this.hotels.values()).map((x: any) => x.id),
+      ...Array.from(this.merchants.values()).map((x: any) => x.id),
+      ...Array.from(this.products.values()).map((x: any) => x.id),
+      ...Array.from(this.orders.values()).map((x: any) => x.id),
+      ...Array.from(this.users.values()).map((x: any) => x.id),
+      ...Array.from(this.clients.values()).map((x: any) => x.id),
+      ...Array.from(this.hotel_merchants.values()).map((x: any) => x.id),
+    ].filter((v) => typeof v === 'number');
+    const maxId = allIds.length ? Math.max(...allIds) : 0;
+    return maxId + 1;
+  }
+
+  private persist(): void {
+    try {
+      const data = {
+        currentId: this.currentId,
+        hotels: Array.from(this.hotels.values()),
+        merchants: Array.from(this.merchants.values()),
+        products: Array.from(this.products.values()),
+        orders: Array.from(this.orders.values()),
+        users: Array.from(this.users.values()),
+        clients: Array.from(this.clients.values()),
+        hotel_merchants: Array.from(this.hotel_merchants.values()),
+        savedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(this.dataFilePath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Failed to persist storage:', e);
+    }
   }
 
   private generateOrderNumber(): string {
@@ -411,6 +536,7 @@ export class MemStorage implements IStorage {
       };
       
       this.hotels.set(fakeHotel.id, fakeHotel);
+      this.persist();
       console.log(`[TEST MODE] Fake hotel created with ID: ${fakeHotel.id}, Code: ${hotelCode}`);
       return fakeHotel;
     } catch (error) {
@@ -424,6 +550,7 @@ export class MemStorage implements IStorage {
     if (!hotel) return undefined;
     const updatedHotel = { ...hotel, ...updates };
     this.hotels.set(id, updatedHotel);
+    this.persist();
     return updatedHotel;
   }
 
@@ -464,14 +591,15 @@ export class MemStorage implements IStorage {
         latitude: insertMerchant.latitude?.toString() || "0",
         longitude: insertMerchant.longitude?.toString() || "0",
         rating: insertMerchant.rating?.toString() || "0.0",
-        review_count: insertMerchant.review_count || 0,
-        is_open: insertMerchant.isOpen !== undefined ? insertMerchant.isOpen : true,
-        image_url: insertMerchant.imageUrl || null,
-        created_at: new Date(),
-        updated_at: new Date()
+        reviewCount: insertMerchant.reviewCount || 0,
+        isOpen: insertMerchant.isOpen !== undefined ? insertMerchant.isOpen : true,
+        imageUrl: insertMerchant.imageUrl || null,
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
       
       this.merchants.set(fakeMerchant.id, fakeMerchant);
+      this.persist();
       console.log(`[TEST MODE] Fake merchant created with ID: ${fakeMerchant.id}`);
       return fakeMerchant;
     } catch (error) {
@@ -485,6 +613,7 @@ export class MemStorage implements IStorage {
     if (!merchant) return undefined;
     const updatedMerchant = { ...merchant, ...updates };
     this.merchants.set(id, updatedMerchant);
+    this.persist();
     return updatedMerchant;
   }
 
@@ -521,6 +650,7 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     this.products.set(id, product);
+    this.persist();
     return product;
   }
 
@@ -529,11 +659,14 @@ export class MemStorage implements IStorage {
     if (!product) return undefined;
     const updatedProduct = { ...product, ...updates, updatedAt: new Date() };
     this.products.set(id, updatedProduct);
+    this.persist();
     return updatedProduct;
   }
 
   async deleteProduct(id: number): Promise<boolean> {
-    return this.products.delete(id);
+    const ok = this.products.delete(id);
+    if (ok) this.persist();
+    return ok;
   }
 
   // Order methods
@@ -608,6 +741,7 @@ export class MemStorage implements IStorage {
       pickedUpAt: null,
     };
     this.orders.set(id, order);
+    this.persist();
     return order;
   }
 
@@ -616,6 +750,7 @@ export class MemStorage implements IStorage {
     if (!order) return undefined;
     const updatedOrder = { ...order, ...updates, updatedAt: new Date() };
     this.orders.set(id, updatedOrder);
+    this.persist();
     return updatedOrder;
   }
 
@@ -651,6 +786,7 @@ export class MemStorage implements IStorage {
       };
       
       this.clients.set(fakeClient.id, fakeClient);
+      this.persist();
       console.log(`[TEST MODE] Fake client created with ID: ${fakeClient.id}`);
       return fakeClient;
     } catch (error) {
@@ -664,6 +800,7 @@ export class MemStorage implements IStorage {
     if (!client) return undefined;
     const updatedClient = { ...client, ...updates, updatedAt: new Date() };
     this.clients.set(id, updatedClient);
+    this.persist();
     return updatedClient;
   }
 
@@ -696,6 +833,7 @@ export class MemStorage implements IStorage {
       entityId: insertUser.entityId || null
     };
     this.users.set(id, user);
+    this.persist();
     return user;
   }
 
@@ -705,11 +843,14 @@ export class MemStorage implements IStorage {
     
     const updatedUser = { ...user, ...updates, updated_at: new Date() };
     this.users.set(id, updatedUser);
+    this.persist();
     return updatedUser;
   }
 
   async deleteUser(id: number): Promise<boolean> {
-    return this.users.delete(id);
+    const ok = this.users.delete(id);
+    if (ok) this.persist();
+    return ok;
   }
 
   async authenticateUser(username: string, password: string): Promise<User | undefined> {
@@ -722,11 +863,11 @@ export class MemStorage implements IStorage {
 
   // Hotel-Merchant associations
   async getHotelMerchants(hotelId: number): Promise<HotelMerchant[]> {
-    return Array.from(this.hotel_merchants.values()).filter(hm => hm.hotel_id === hotelId && hm.is_active);
+    return Array.from(this.hotel_merchants.values()).filter((hm: any) => (hm.hotel_id ?? hm.hotelId) === hotelId && (hm.is_active ?? hm.isActive));
   }
 
   async getMerchantHotels(merchantId: number): Promise<HotelMerchant[]> {
-    return Array.from(this.hotel_merchants.values()).filter(hm => hm.merchant_id === merchantId && hm.is_active);
+    return Array.from(this.hotel_merchants.values()).filter((hm: any) => (hm.merchant_id ?? hm.merchantId) === merchantId && (hm.is_active ?? hm.isActive));
   }
 
   async addHotelMerchant(association: InsertHotelMerchant): Promise<HotelMerchant> {
@@ -740,29 +881,30 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
           this.hotel_merchants.set(id, hotelMerchant);
+    this.persist();
     return hotelMerchant;
   }
 
   async updateHotelMerchant(hotelId: number, merchantId: number, isActive: boolean): Promise<HotelMerchant | undefined> {
-    const association = Array.from(this.hotel_merchants.values()).find(
-      hm => hm.hotel_id === hotelId && hm.merchant_id === merchantId
-    );
+    const association = Array.from(this.hotel_merchants.values()).find((hm: any) => (hm.hotel_id ?? hm.hotelId) === hotelId && (hm.merchant_id ?? hm.merchantId) === merchantId);
     if (!association) return undefined;
-    association.isActive = isActive;
-    association.updatedAt = new Date();
-    return association;
+    (association as any).isActive = isActive;
+    (association as any).updatedAt = new Date();
+    this.persist();
+    return association as any;
   }
 
   async removeHotelMerchant(hotelId: number, merchantId: number): Promise<boolean> {
-    const association = Array.from(this.hotel_merchants.entries()).find(
-      ([_, hm]) => hm.hotel_id === hotelId && hm.merchant_id === merchantId
-    );
+    const association = Array.from(this.hotel_merchants.entries()).find(([_, hm]: any) => ((hm.hotel_id ?? hm.hotelId) === hotelId) && ((hm.merchant_id ?? hm.merchantId) === merchantId));
     if (!association) return false;
-    return this.hotel_merchants.delete(association[0]);
+    const ok = this.hotel_merchants.delete(association[0]);
+    if (ok) this.persist();
+    return ok;
   }
 }
 
 export class PostgresStorage implements IStorage {
+  private sb = supabaseAdmin;
   async createHotel(hotel: InsertHotel): Promise<Hotel> {
     try {
       console.log(`Creating hotel: ${hotel.name}`);
@@ -802,6 +944,11 @@ export class PostgresStorage implements IStorage {
   }
   // À implémenter : méthodes CRUD utilisant Drizzle ORM
   async getAllHotels(): Promise<Hotel[]> {
+    if (this.sb) {
+      const { data, error } = await this.sb.from('hotels').select('*');
+      if (error) throw error;
+      return data as any;
+    }
     return await db.select().from(hotels);
   }
   async getHotel(id: number): Promise<Hotel | undefined> {
@@ -818,6 +965,11 @@ export class PostgresStorage implements IStorage {
     return hotel;
   }
   async getAllMerchants(): Promise<Merchant[]> {
+    if (this.sb) {
+      const { data, error } = await this.sb.from('merchants').select('*');
+      if (error) throw error;
+      return data as any;
+    }
     return await db.select().from(merchants);
   }
   async getMerchant(id: number): Promise<Merchant | undefined> {
@@ -859,6 +1011,11 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(products).where(eq(products.merchantId, merchantId));
   }
   async getAllProducts(): Promise<Product[]> {
+    if (this.sb) {
+      const { data, error } = await this.sb.from('products').select('*');
+      if (error) throw error;
+      return data as any;
+    }
     return await db.select().from(products);
   }
   async createProduct(product: InsertProduct): Promise<Product> {
@@ -911,6 +1068,11 @@ export class PostgresStorage implements IStorage {
     );
   }
   async getAllOrders(): Promise<Order[]> {
+    if (this.sb) {
+      const { data, error } = await this.sb.from('orders').select('*');
+      if (error) throw error;
+      return data as any;
+    }
     return await db.select().from(orders);
   }
   async createOrder(order: InsertOrder): Promise<Order> {
@@ -938,7 +1100,7 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(clients);
   }
   async createClient(client: InsertClient): Promise<Client> {
-    const hashedPassword = await bcrypt.hash(client.password, 10);
+    const hashedPassword = await bcrypt.hash((client as any).password, 10);
     const [created] = await db.insert(clients).values({
       ...client,
       password: hashedPassword,
@@ -956,25 +1118,10 @@ export class PostgresStorage implements IStorage {
   }
   async authenticateClient(email: string, password: string): Promise<Client | undefined> {
     try {
-      // BYPASS AUTHENTICATION FOR TESTING - Accept any email/password
-      console.log(`[TEST MODE] Client login attempt for: ${email}`);
-      
-      // Create a fake client for testing
-      const fakeClient: Client = {
-        id: 1,
-        email: email,
-        password: 'hashed_password',
-        firstName: 'Test',
-        lastName: 'Client',
-        phone: '+33 6 12 34 56 78',
-        isActive: true,
-        hasCompletedTutorial: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      console.log(`[TEST MODE] Client login successful for: ${email}`);
-      return fakeClient;
+      const client = await this.getClientByEmail(email);
+      if (!client) return undefined;
+      const ok = await bcrypt.compare(password, (client as any).password);
+      return ok ? client : undefined;
     } catch (error) {
       console.error('Client authentication error:', error);
       return undefined;
@@ -1004,9 +1151,8 @@ export class PostgresStorage implements IStorage {
   async authenticateUser(username: string, password: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
     if (!user) return undefined;
-    // BYPASS AUTHENTICATION FOR TESTING - Accept any password
-    console.log(`[TEST MODE] Bypassing password check for user: ${username}`);
-    return user;
+    const ok = await bcrypt.compare(password, (user as any).password);
+    return ok ? user : undefined;
   }
   async getHotelMerchants(hotelId: number): Promise<HotelMerchant[]> {
     return await db.select().from(hotel_merchants).where(
@@ -1041,6 +1187,8 @@ export class PostgresStorage implements IStorage {
   }
 }
 
-// Force MemStorage for development/testing to avoid database connection issues
-export const storage = new MemStorage();
-console.log('🔧 Using MemStorage for development/testing');
+// Choisir le storage selon l'environnement
+export const storage = isProdEnv && process.env.DATABASE_URL
+  ? new PostgresStorage()
+  : new MemStorage();
+console.log(storage instanceof PostgresStorage ? '🗄️ Using PostgresStorage (Supabase)' : '🔧 Using MemStorage for development/testing');

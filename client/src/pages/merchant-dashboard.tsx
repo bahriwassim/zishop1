@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -33,15 +33,34 @@ const productSchema = z.object({
 });
 
 export default function MerchantDashboard() {
-  const [selectedMerchantId] = useState(() => {
+  const [selectedMerchantId, setSelectedMerchantId] = useState<number>(() => {
     // Récupérer l'ID du commerçant depuis localStorage
     const merchantStr = localStorage.getItem("merchant");
     if (merchantStr) {
-      const merchant = JSON.parse(merchantStr);
-      return merchant.id;
+      try {
+        const merchant = JSON.parse(merchantStr);
+        if (merchant?.id) return Number(merchant.id);
+      } catch {}
     }
-    return 1; // Default to first merchant
+    // Pas de commerçant en localStorage: valeur provisoire
+    return 0;
   });
+
+  // Si aucun commerçant en localStorage, charger la liste et choisir le premier
+  useEffect(() => {
+    (async () => {
+      if (!selectedMerchantId || selectedMerchantId <= 0) {
+        try {
+          const merchants = await api.getAllMerchants();
+          if (Array.isArray(merchants) && merchants.length > 0) {
+            const firstMerchant = merchants[0];
+            setSelectedMerchantId(firstMerchant.id);
+            localStorage.setItem("merchant", JSON.stringify(firstMerchant));
+          }
+        } catch (e) {}
+      }
+    })();
+  }, [selectedMerchantId]);
   const [activeSection, setActiveSection] = useState("dashboard");
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -196,7 +215,7 @@ export default function MerchantDashboard() {
 
   const recentOrders = orders.slice(0, 5);
 
-  if (!merchant) {
+  if (!merchant || !selectedMerchantId) {
     return <div>Chargement...</div>;
   }
 

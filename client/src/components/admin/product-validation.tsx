@@ -49,7 +49,7 @@ export function ProductValidation() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/products');
+      const response = await fetch('/api/products');
       if (response.ok) {
         const data = await response.json();
         console.log('Produits chargés:', data);
@@ -71,7 +71,7 @@ export function ProductValidation() {
       console.log(`Validation produit ${productId}: ${action}`, { note: validationNote });
       
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/products/${productId}/validate`, {
+      const response = await fetch(`/api/products/${productId}/validate`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -110,6 +110,19 @@ export function ProductValidation() {
         product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.merchant?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
+    }
+
+    // Filtre par statut / catégorie
+    if (filter === 'pending') {
+      filtered = filtered.filter((p: any) => (p.validationStatus || p.validation_status || 'pending') === 'pending');
+    } else if (filter === 'approved') {
+      filtered = filtered.filter((p: any) => (p.validationStatus || p.validation_status) === 'approved');
+    } else if (filter === 'rejected') {
+      filtered = filtered.filter((p: any) => (p.validationStatus || p.validation_status) === 'rejected');
+    } else if (filter === 'issues') {
+      filtered = filtered.filter(p => checkProductCompliance(p).length > 0);
+    } else if (filter === 'souvenirs') {
+      filtered = filtered.filter(p => p.isSouvenir);
     }
 
     setFilteredProducts(filtered);

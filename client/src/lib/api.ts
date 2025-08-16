@@ -1,12 +1,160 @@
 import { apiRequest } from "./queryClient";
 import type { Hotel, Merchant, Product, Order, InsertOrder, Client, InsertClient } from "@shared/schema";
-import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { AdminProductValidation, AdminMerchantValidation, AdminHotelValidation } from '@/types';
 
-const API_URL = 'http://localhost:5000/api';
+// Configuration centralisée
+const API_CONFIG = {
+  BASE_URL: process.env.NODE_ENV === 'production' 
+    ? 'https://api.zishop.co/api' 
+    : 'http://localhost:5000/api',
+  TIMEOUT: 10000,
+  RETRY_ATTEMPTS: 3,
+  RETRY_DELAY: 1000
+};
+
+// Types d'erreur personnalisés
+class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+// Gestionnaire d'erreurs centralisé
+const handleApiError = (error: AxiosError): never => {
+  if (error.response) {
+    // Erreur de réponse du serveur
+    const status = error.response.status;
+    const data = error.response.data as any;
+    
+    switch (status) {
+      case 400:
+        throw new ApiError(
+          data.message || 'Données invalides',
+          status,
+          'VALIDATION_ERROR',
+          data.errors
+        );
+      case 401:
+        throw new ApiError(
+          'Session expirée. Veuillez vous reconnecter.',
+          status,
+          'UNAUTHORIZED'
+        );
+      case 403:
+        throw new ApiError(
+          'Accès refusé',
+          status,
+          'FORBIDDEN'
+        );
+      case 404:
+        throw new ApiError(
+          'Ressource non trouvée',
+          status,
+          'NOT_FOUND'
+        );
+      case 429:
+        throw new ApiError(
+          'Trop de requêtes. Veuillez patienter.',
+          status,
+          'RATE_LIMITED'
+        );
+      case 500:
+        throw new ApiError(
+          'Erreur interne du serveur',
+          status,
+          'INTERNAL_ERROR'
+        );
+      default:
+        throw new ApiError(
+          data.message || `Erreur ${status}`,
+          status,
+          'UNKNOWN_ERROR'
+        );
+    }
+  } else if (error.request) {
+    // Erreur de réseau
+    throw new NetworkError(
+      'Impossible de se connecter au serveur. Vérifiez votre connexion internet.'
+    );
+  } else {
+    // Erreur de configuration
+    throw new Error('Erreur de configuration de la requête');
+  }
+};
+
+// Gestionnaire de retry automatique
+const withRetry = async <T>(
+  fn: () => Promise<T>,
+  retries: number = API_CONFIG.RETRY_ATTEMPTS
+): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0 && error instanceof NetworkError) {
+      await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
+      return withRetry(fn, retries - 1);
+    }
+    throw error;
+  }
+};
+
+// Gestionnaire de token sécurisé
+const tokenManager = {
+  getToken: (): string | null => {
+    try {
+      return localStorage.getItem('token');
+    } catch {
+      return null;
+    }
+  },
+  
+  setToken: (token: string): void => {
+    try {
+      localStorage.setItem('token', token);
+    } catch (error) {
+      console.warn('Impossible de sauvegarder le token:', error);
+    }
+  },
+  
+  removeToken: (): void => {
+    try {
+      localStorage.removeItem('token');
+    } catch (error) {
+      console.warn('Impossible de supprimer le token:', error);
+    }
+  },
+  
+  isTokenValid: (): boolean => {
+    const token = tokenManager.getToken();
+    if (!token) return false;
+    
+    try {
+      // Vérifier si le token n'est pas expiré (JWT)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.exp * 1000 > Date.now();
+    } catch {
+      return false;
+    }
+  }
+};
 
 const axiosInstance: AxiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,228 +162,248 @@ const axiosInstance: AxiosInstance = axios.create({
 
 // Intercepteur pour ajouter le token d'authentification
 axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem('token');
-  if (token) {
+  const token = tokenManager.getToken();
+  if (token && tokenManager.isTokenValid()) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-async function fetchWithErrorHandling(url: string, options?: RequestInit) {
-  try {
-    const response = await fetch(url, options);
-    
-    // Vérifier le content-type
-    const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      // Si ce n'est pas du JSON, c'est probablement une erreur HTML
-      const text = await response.text();
-      console.error("Non-JSON response:", text.substring(0, 200));
-      
-      if (text.includes("<!DOCTYPE") || text.includes("<html")) {
-        throw new Error("Le serveur n'est pas accessible. Veuillez vérifier que le serveur backend est démarré.");
+// Intercepteur pour gérer les erreurs d'authentification
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      tokenManager.removeToken();
+      // Rediriger vers la page de connexion si nécessaire
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
       }
-      throw new Error("Réponse invalide du serveur");
     }
-    
-    if (!response.ok) {
-      const error = await response.json();
-      console.error("API Error:", error);
-      
-      // Créer une erreur avec les détails de la réponse
-      const apiError = new Error(error.message || `HTTP error! status: ${response.status}`);
-      (apiError as any).response = { data: error, status: response.status };
-      throw apiError;
-    }
-    
-    return response;
-  } catch (error: any) {
-    if (error.message.includes("Failed to fetch")) {
-      throw new Error("Impossible de se connecter au serveur. Vérifiez que le serveur est démarré sur le port 5000.");
-    }
-    throw error;
+    return Promise.reject(error);
   }
-}
+);
+
+// Fonction utilitaire pour les requêtes avec gestion d'erreur
+const apiCall = async <T>(
+  apiCall: () => Promise<T>
+): Promise<T> => {
+  return withRetry(async () => {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        handleApiError(error);
+      }
+      throw error;
+    }
+  });
+};
 
 export const api = {
   // Hotels
   getHotels: (): Promise<Hotel[]> =>
-    axiosInstance.get('/hotels').then(res => res.data),
+    apiCall(() => axiosInstance.get('/hotels').then(res => res.data)),
   
   getHotelByCode: (code: string): Promise<Hotel> =>
-    axiosInstance.get(`/hotels/code/${code}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/hotels/code/${code}`).then(res => res.data)),
 
   createHotel: (hotel: any): Promise<Hotel> =>
-    axiosInstance.post('/hotels', hotel).then(res => res.data),
+    apiCall(() => axiosInstance.post('/hotels', hotel).then(res => res.data)),
 
   updateHotel: (id: number, updates: any): Promise<Hotel> =>
-    axiosInstance.put(`/hotels/${id}`, updates).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/hotels/${id}`, updates).then(res => res.data)),
 
   deleteHotel: (id: number): Promise<void> =>
-    axiosInstance.delete(`/hotels/${id}`).then(() => {}),
+    apiCall(() => axiosInstance.delete(`/hotels/${id}`).then(() => {})),
 
   // Merchants
   getMerchantsNearHotel: (hotelId: number, radius: number = 3): Promise<Merchant[]> =>
-    axiosInstance.get(`/merchants/near/${hotelId}?radius=${radius}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/merchants/near/${hotelId}?radius=${radius}`).then(res => res.data)),
 
   getAllMerchants: (): Promise<Merchant[]> =>
-    axiosInstance.get('/merchants').then(res => res.data),
+    apiCall(() => axiosInstance.get('/merchants').then(res => res.data)),
 
   createMerchant: (merchant: any): Promise<Merchant> =>
-    axiosInstance.post('/merchants', merchant).then(res => res.data),
+    apiCall(() => axiosInstance.post('/merchants', merchant).then(res => res.data)),
 
   updateMerchant: (id: number, updates: any): Promise<Merchant> =>
-    axiosInstance.put(`/merchants/${id}`, updates).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/merchants/${id}`, updates).then(res => res.data)),
 
   deleteMerchant: (id: number): Promise<void> =>
-    axiosInstance.delete(`/merchants/${id}`).then(() => {}),
+    apiCall(() => axiosInstance.delete(`/merchants/${id}`).then(() => {})),
 
   // Products
   getProductsByMerchant: (merchantId: number): Promise<Product[]> =>
-    axiosInstance.get(`/products/merchant/${merchantId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/products/merchant/${merchantId}`).then(res => res.data)),
 
   getAllProducts: (): Promise<Product[]> =>
-    axiosInstance.get('/products').then(res => res.data),
+    apiCall(() => axiosInstance.get('/products').then(res => res.data)),
 
   createProduct: (product: any): Promise<Product> =>
-    axiosInstance.post('/products', product).then(res => res.data),
+    apiCall(() => axiosInstance.post('/products', product).then(res => res.data)),
 
   updateProduct: (id: number, updates: any): Promise<Product> =>
-    axiosInstance.put(`/products/${id}`, updates).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/products/${id}`, updates).then(res => res.data)),
 
   deleteProduct: (id: number): Promise<void> =>
-    axiosInstance.delete(`/products/${id}`).then(() => {}),
+    apiCall(() => axiosInstance.delete(`/products/${id}`).then(() => {})),
 
   // Orders
   getOrdersByHotel: (hotelId: number): Promise<Order[]> =>
-    axiosInstance.get(`/orders/hotel/${hotelId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/hotel/${hotelId}`).then(res => res.data)),
 
   getOrdersByMerchant: (merchantId: number): Promise<Order[]> =>
-    axiosInstance.get(`/orders/merchant/${merchantId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/merchant/${merchantId}`).then(res => res.data)),
 
   getAllOrders: (): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data),
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data)),
 
   getOrder: (id: number): Promise<Order> =>
-    axiosInstance.get(`/orders/${id}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/${id}`).then(res => res.data)),
 
   createOrder: (order: InsertOrder): Promise<Order> =>
-    axiosInstance.post("/orders", order).then(res => res.data),
+    apiCall(() => axiosInstance.post("/orders", order).then(res => res.data)),
 
   updateOrder: (id: number, updates: any): Promise<Order> =>
-    axiosInstance.put(`/orders/${id}`, updates).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/orders/${id}`, updates).then(res => res.data)),
 
   updateOrderStatus: (id: number, status: string): Promise<Order> =>
-    axiosInstance.put(`/orders/${id}`, { status }).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/orders/${id}`, { status }).then(res => res.data)),
 
   // Workflow et commission endpoints
   getOrderWorkflow: (): Promise<any> =>
-    axiosInstance.get('/orders/workflow').then(res => res.data),
+    apiCall(() => axiosInstance.get('/orders/workflow').then(res => res.data)),
 
   getCommissionStats: (period: "today" | "week" | "month" = "today"): Promise<any> =>
-    axiosInstance.get(`/orders/commissions/stats?period=${period}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/commissions/stats?period=${period}`).then(res => res.data)),
 
   // Client-specific methods
   getOrdersByCustomer: (customerName: string, customerRoom: string): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => 
         order.customer_name === customerName && 
         order.customer_room === customerRoom
       )
-    ),
+    )),
 
   getActiveOrdersByCustomer: (customerName: string, customerRoom: string): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => 
         order.customer_name === customerName && 
         order.customer_room === customerRoom &&
         order.status !== 'delivered'
       )
-    ),
+    )),
 
   getOrdersByClient: (clientId: number): Promise<Order[]> =>
-    axiosInstance.get(`/orders/client/${clientId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/client/${clientId}`).then(res => res.data)),
 
   getActiveOrdersByClient: (clientId: number): Promise<Order[]> =>
-    axiosInstance.get(`/orders/client/${clientId}/active`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/orders/client/${clientId}/active`).then(res => res.data)),
 
   // Client authentication and management
   async login(email: string, password: string) {
-    console.log("API Login attempt:", { email });
-    const response = await axiosInstance.post('/clients/login', { email, password });
-    const data = response.data;
-    console.log("API Login response:", data);
-    
-    // Return the client data directly with token
-    if (data.client && data.token) {
-      localStorage.setItem('token', data.token);
-      return { ...data.client, token: data.token };
+    if (!email || !password) {
+      throw new ApiError('Email et mot de passe requis', 400, 'MISSING_CREDENTIALS');
     }
-    return data;
+    
+    try {
+      const response = await axiosInstance.post('/clients/login', { email, password });
+      const data = response.data;
+      
+      if (data.client && data.token) {
+        tokenManager.setToken(data.token);
+        return { ...data.client, token: data.token };
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        handleApiError(error);
+      }
+      throw error;
+    }
   },
 
   registerClient: (clientData: InsertClient): Promise<Client> =>
-    axiosInstance.post('/clients/register', clientData).then(res => res.data),
+    apiCall(() => axiosInstance.post('/clients/register', clientData).then(res => res.data)),
 
   getClient: (id: number): Promise<Client> =>
-    axiosInstance.get(`/clients/${id}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/clients/${id}`).then(res => res.data)),
 
   updateClient: (id: number, updates: Partial<Client>): Promise<Client> =>
-    axiosInstance.put(`/clients/${id}`, updates).then(res => res.data),
+    apiCall(() => axiosInstance.put(`/clients/${id}`, updates).then(res => res.data)),
 
   getClientStats: (clientId: number): Promise<any> =>
-    axiosInstance.get(`/clients/${clientId}/stats`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/clients/${clientId}/stats`).then(res => res.data)),
 
   // Statistics
   getHotelStats: (hotelId: number): Promise<any> =>
-    axiosInstance.get(`/stats/hotel/${hotelId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/stats/hotel/${hotelId}`).then(res => res.data)),
 
   getMerchantStats: (merchantId: number): Promise<any> =>
-    axiosInstance.get(`/stats/merchant/${merchantId}`).then(res => res.data),
+    apiCall(() => axiosInstance.get(`/stats/merchant/${merchantId}`).then(res => res.data)),
 
   getAdminStats: (): Promise<any> =>
-    axiosInstance.get('/stats/admin').then(res => res.data),
+    apiCall(() => axiosInstance.get('/stats/admin').then(res => res.data)),
 
   // Nouvelles méthodes pour le suivi avancé des commandes
   getOrdersWithCommissions: (): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data),
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data)),
 
   getOrdersByStatus: (status: string): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
       orders.filter(order => order.status === status)
-    ),
+    )),
 
   getOrdersByDateRange: (startDate: string, endDate: string): Promise<Order[]> =>
-    axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => 
-      orders.filter(order => {
-        const orderDate = new Date(order.created_at);
-        return orderDate >= new Date(startDate) && orderDate <= new Date(endDate);
-      })
-    ),
+    apiCall(() => axiosInstance.get('/orders').then(res => res.data).then((orders: Order[]) => {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return orders.filter(order => {
+        const date = new Date((order as any).createdAt || (order as any).created_at);
+        return date >= start && date <= end;
+      });
+    })),
 
-  // Méthodes pour la gestion des notifications (à implémenter)
+  // Méthodes pour la gestion des notifications
   getNotifications: (userId: number, userType: string): Promise<any[]> =>
-    Promise.resolve([]), // Placeholder pour les notifications
+    apiCall(() => axiosInstance.get(`/notifications/${userType}/${userId}`).then(res => res.data)),
 
   markNotificationAsRead: (notificationId: number): Promise<void> =>
-    Promise.resolve(), // Placeholder pour marquer comme lu
+    apiCall(() => axiosInstance.put(`/notifications/${notificationId}/read`).then(() => {})),
 
   // Nouvelles méthodes pour la validation
   validateProduct: (validation: AdminProductValidation) => 
-    axiosInstance.post('/admin/products/validate', validation).then(res => res.data),
+    apiCall(() => axiosInstance.post(`/products/${(validation as any).productId}/validate`, { 
+      action: (validation as any).action, 
+      note: (validation as any).note 
+    }).then(res => res.data)),
 
   validateMerchant: (validation: AdminMerchantValidation) => 
-    axiosInstance.post('/admin/merchants/validate', validation).then(res => res.data),
+    apiCall(() => axiosInstance.post('/admin/merchants/validate', validation).then(res => res.data)),
 
   validateHotel: (validation: AdminHotelValidation) => 
-    axiosInstance.post('/admin/hotels/validate', validation).then(res => res.data),
+    apiCall(() => axiosInstance.post('/admin/hotels/validate', validation).then(res => res.data)),
 
   getPendingProducts: () => 
-    axiosInstance.get('/admin/products/pending').then(res => res.data),
+    apiCall(() => axiosInstance.get('/admin/products/pending').then(res => res.data)),
 
   getPendingMerchants: () => 
-    axiosInstance.get('/admin/merchants/pending').then(res => res.data),
+    apiCall(() => axiosInstance.get('/admin/merchants/pending').then(res => res.data)),
 
   getPendingHotels: () => 
-    axiosInstance.get('/admin/hotels/pending').then(res => res.data),
+    apiCall(() => axiosInstance.get('/admin/hotels/pending').then(res => res.data)),
+
+  // Méthodes utilitaires
+  logout: (): void => {
+    tokenManager.removeToken();
+  },
+
+  isAuthenticated: (): boolean => {
+    return tokenManager.isTokenValid();
+  }
 };
+
+// Export des types d'erreur pour utilisation externe
+export type { ApiError, NetworkError };
